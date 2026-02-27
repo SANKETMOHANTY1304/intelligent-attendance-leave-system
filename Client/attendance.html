@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Suite - Attendance</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app-layout" id="app"></div>
+
+  <script src="js/app.js"></script>
+  <script>
+    const user = requireAuth();
+    if (user) {
+      if (user.role === "admin") {
+        renderAdminAttendance();
+      } else {
+        renderEmployeeAttendance();
+      }
+      initSidebar();
+    }
+
+    // ===== Admin Attendance View =====
+    function renderAdminAttendance() {
+      const attendance = getAttendance();
+      const presentCount = attendance.filter(a => a.status === "Present").length;
+      const lateCount = attendance.filter(a => a.status === "Late").length;
+      const absentCount = attendance.filter(a => a.status === "Absent").length;
+      const onLeaveCount = attendance.filter(a => a.status === "On Leave").length;
+
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("admin", "attendance")}
+        <main class="main-content">
+          ${renderTopbar("Attendance", "Administration / Attendance")}
+          <div class="content-area">
+            <div class="page-header">
+              <div>
+                <h2>Attendance Tracker</h2>
+                <p>View and monitor employee attendance records.</p>
+              </div>
+            </div>
+
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-icon green">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="stat-info">
+                  <h4>Present</h4>
+                  <div class="stat-value">${presentCount}</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon orange">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div class="stat-info">
+                  <h4>Late</h4>
+                  <div class="stat-value">${lateCount}</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon red">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                </div>
+                <div class="stat-info">
+                  <h4>Absent</h4>
+                  <div class="stat-value">${absentCount}</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon blue">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                </div>
+                <div class="stat-info">
+                  <h4>On Leave</h4>
+                  <div class="stat-value">${onLeaveCount}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3>All Attendance Records</h3>
+              </div>
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th>Date</th>
+                      <th>Check In</th>
+                      <th>Check Out</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${attendance.map(a => `
+                      <tr>
+                        <td><strong>${a.employeeName}</strong></td>
+                        <td>${formatDate(a.date)}</td>
+                        <td>${a.checkIn}</td>
+                        <td>${a.checkOut}</td>
+                        <td>${getStatusBadge(a.status)}</td>
+                      </tr>
+                    `).join("")}
+                  </tbody>
+                </table>
+              </div>
+              <div class="card-footer" style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:0.8125rem;color:var(--color-text-secondary)">Showing ${attendance.length} records</span>
+              </div>
+            </div>
+          </div>
+        </main>
+      `;
+    }
+
+    // ===== Employee Attendance View =====
+    function renderEmployeeAttendance() {
+      const attendance = getAttendance();
+      const empName = user.employeeData ? user.employeeData.name : user.name;
+      const myRecords = attendance.filter(a => a.employeeName === empName);
+
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("employee", "my-attendance")}
+        <main class="main-content">
+          ${renderTopbar("My Attendance", "Employee / Attendance")}
+          <div class="content-area">
+            <div class="page-header">
+              <div>
+                <h2>My Attendance</h2>
+                <p>Mark your daily attendance and view your attendance history.</p>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div class="card">
+                <div class="card-header">
+                  <h3>Mark Attendance</h3>
+                </div>
+                <div class="card-body">
+                  <form id="attendanceForm">
+                    <div class="form-group">
+                      <label for="attDate">Date</label>
+                      <input type="date" id="attDate" class="form-control" value="${new Date().toISOString().split('T')[0]}" required />
+                    </div>
+                    <div class="form-group">
+                      <label for="attCheckIn">Check-In Time</label>
+                      <input type="time" id="attCheckIn" class="form-control" required />
+                    </div>
+                    <div class="form-group">
+                      <label for="attCheckOut">Check-Out Time</label>
+                      <input type="time" id="attCheckOut" class="form-control" required />
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                      Submit Attendance
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-header">
+                  <h3>Attendance History</h3>
+                </div>
+                ${myRecords.length > 0 ? `
+                <div class="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Check In</th>
+                        <th>Check Out</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${myRecords.map(a => `
+                        <tr>
+                          <td>${formatDate(a.date)}</td>
+                          <td>${a.checkIn}</td>
+                          <td>${a.checkOut}</td>
+                          <td>${getStatusBadge(a.status)}</td>
+                        </tr>
+                      `).join("")}
+                    </tbody>
+                  </table>
+                </div>
+                ` : `
+                <div class="card-body">
+                  <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <h4>No records yet</h4>
+                    <p>Submit your first attendance to see it here.</p>
+                  </div>
+                </div>
+                `}
+              </div>
+            </div>
+          </div>
+        </main>
+      `;
+
+      // Bind form
+      document.getElementById("attendanceForm").addEventListener("submit", function(e) {
+        e.preventDefault();
+        const attendance = getAttendance();
+        const empName = user.employeeData ? user.employeeData.name : user.name;
+        const date = document.getElementById("attDate").value;
+        const checkIn = document.getElementById("attCheckIn").value;
+        const checkOut = document.getElementById("attCheckOut").value;
+
+        // Check duplicate
+        const exists = attendance.find(a => a.employeeName === empName && a.date === date);
+        if (exists) {
+          showToast("Attendance already marked for this date", "error");
+          return;
+        }
+
+        const status = checkIn > "09:15" ? "Late" : "Present";
+        const newRecord = {
+          id: attendance.length > 0 ? Math.max(...attendance.map(a => a.id)) + 1 : 1,
+          employeeName: empName,
+          date: date,
+          checkIn: checkIn,
+          checkOut: checkOut,
+          status: status,
+        };
+
+        attendance.push(newRecord);
+        saveAttendance(attendance);
+        showToast("Attendance submitted successfully!", "success");
+        this.reset();
+        renderEmployeeAttendance();
+        initSidebar();
+      });
+    }
+  </script>
+</body>
+</html>
