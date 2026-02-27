@@ -1,1 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Suite - Employees</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app-layout" id="app"></div>
+
+  <!-- Add Employee Modal -->
+  <div class="modal-overlay" id="addEmployeeModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Add New Employee</h3>
+        <button class="modal-close" onclick="closeModal('addEmployeeModal')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <form id="addEmployeeForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="empName">Full Name</label>
+            <input type="text" id="empName" class="form-control" placeholder="John Doe" required />
+          </div>
+          <div class="form-group">
+            <label for="empEmail">Email</label>
+            <input type="email" id="empEmail" class="form-control" placeholder="john@company.com" required />
+          </div>
+          <div class="form-group">
+            <label for="empDept">Department</label>
+            <select id="empDept" class="form-control" required>
+              <option value="">Select department</option>
+              <option value="Engineering">Engineering</option>
+              <option value="Design">Design</option>
+              <option value="Marketing">Marketing</option>
+              <option value="HR">HR</option>
+              <option value="Finance">Finance</option>
+              <option value="Support">Support</option>
+              <option value="Sales">Sales</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="empDesignation">Designation</label>
+            <input type="text" id="empDesignation" class="form-control" placeholder="Software Engineer" required />
+          </div>
+          <div class="form-group">
+            <label for="empSalary">Salary</label>
+            <input type="text" id="empSalary" class="form-control" placeholder="80,000" required />
+          </div>
+          <div class="form-group">
+            <label for="empJoining">Joining Date</label>
+            <input type="date" id="empJoining" class="form-control" required />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('addEmployeeModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add Employee</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    const user = requireAuth("admin");
+    if (user) {
+      renderPage();
+      initSidebar();
+    }
+
+    function renderPage() {
+      const employees = getEmployees();
+
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("admin", "employees")}
+        <main class="main-content">
+          ${renderTopbar("Employees", "Administration / Employees")}
+          <div class="content-area">
+            <div class="page-header">
+              <div>
+                <h2>Employee Directory</h2>
+                <p>Manage and view all employees in your organization.</p>
+              </div>
+              <div style="display:flex;gap:12px">
+                <button class="btn btn-outline" onclick="loadEmployees()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  Reload
+                </button>
+                <button class="btn btn-primary" onclick="openModal('addEmployeeModal')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Add Employee
+                </button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Department</th>
+                      <th>Designation</th>
+                      <th>Salary</th>
+                      <th>Joining Date</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="employeeTableBody">
+                    ${employees.map(emp => `
+                      <tr>
+                        <td><strong>${emp.name}</strong></td>
+                        <td>${emp.email}</td>
+                        <td><span class="badge badge-primary">${emp.department}</span></td>
+                        <td>${emp.designation}</td>
+                        <td>$${emp.salary}</td>
+                        <td>${formatDate(emp.joiningDate)}</td>
+                        <td>
+                          <div class="action-btns">
+                            <button class="btn btn-outline btn-sm btn-icon" title="View" onclick="showToast('Viewing ${emp.name} details', 'info')">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                            <button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="deleteEmployee(${emp.id})">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    `).join("")}
+                  </tbody>
+                </table>
+              </div>
+              <div class="card-footer" style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:0.8125rem;color:var(--color-text-secondary)">Showing ${employees.length} employees</span>
+              </div>
+            </div>
+          </div>
+        </main>
+      `;
+    }
+
+    function loadEmployees() {
+      showToast("Employee list refreshed", "success");
+      renderPage();
+      initSidebar();
+    }
+
+    function deleteEmployee(id) {
+      if (!confirm("Are you sure you want to remove this employee?")) return;
+      let employees = getEmployees();
+      employees = employees.filter(e => e.id !== id);
+      saveEmployees(employees);
+      showToast("Employee removed successfully", "success");
+      renderPage();
+      initSidebar();
+    }
+
+    document.getElementById("addEmployeeForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const employees = getEmployees();
+      const newId = employees.length > 0 ? Math.max(...employees.map(e => e.id)) + 1 : 1;
+      
+      const newEmp = {
+        id: newId,
+        name: document.getElementById("empName").value.trim(),
+        email: document.getElementById("empEmail").value.trim(),
+        department: document.getElementById("empDept").value,
+        designation: document.getElementById("empDesignation").value.trim(),
+        salary: document.getElementById("empSalary").value.trim(),
+        joiningDate: document.getElementById("empJoining").value,
+      };
+
+      employees.push(newEmp);
+      saveEmployees(employees);
+      closeModal("addEmployeeModal");
+      this.reset();
+      showToast(`${newEmp.name} has been added successfully`, "success");
+      renderPage();
+      initSidebar();
+    });
+  </script>
+</body>
+</html>
 
