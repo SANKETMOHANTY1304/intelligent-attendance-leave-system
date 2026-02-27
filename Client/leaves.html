@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Suite - Leave Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app-layout" id="app"></div>
+
+  <script src="js/app.js"></script>
+  <script>
+    const user = requireAuth();
+    if (user) {
+      if (user.role === "admin") {
+        renderAdminLeave();
+      } else {
+        renderEmployeeLeave();
+      }
+      initSidebar();
+    }
+
+    // ===== Admin Leave Management =====
+    function renderAdminLeave() {
+      const leaves = getLeaves();
+      const pending = leaves.filter(l => l.status === "Pending");
+      const approved = leaves.filter(l => l.status === "Approved");
+      const rejected = leaves.filter(l => l.status === "Rejected");
+
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("admin", "leave-management")}
+        <main class="main-content">
+          ${renderTopbar("Leave Management", "Administration / Leave")}
+          <div class="content-area">
+            <div class="page-header">
+              <div>
+                <h2>Leave Requests</h2>
+                <p>Review, approve or reject employee leave requests.</p>
+              </div>
+            </div>
+
+            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+              <div class="stat-card">
+                <div class="stat-icon orange">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div class="stat-info">
+                  <h4>Pending</h4>
+                  <div class="stat-value">${pending.length}</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon green">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="stat-info">
+                  <h4>Approved</h4>
+                  <div class="stat-value">${approved.length}</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon red">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                </div>
+                <div class="stat-info">
+                  <h4>Rejected</h4>
+                  <div class="stat-value">${rejected.length}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3>All Leave Requests</h3>
+              </div>
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th>Type</th>
+                      <th>Start Date</th>
+                      <th>End Date</th>
+                      <th>Reason</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="leaveTableBody">
+                    ${leaves.map(l => `
+                      <tr>
+                        <td><strong>${l.employeeName}</strong></td>
+                        <td>${l.type}</td>
+                        <td>${formatDate(l.startDate)}</td>
+                        <td>${formatDate(l.endDate)}</td>
+                        <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${l.reason}">${l.reason}</td>
+                        <td>${getStatusBadge(l.status)}</td>
+                        <td>
+                          <div class="action-btns">
+                            ${l.status === "Pending" ? `
+                              <button class="btn btn-success btn-sm" onclick="updateLeaveStatus(${l.id}, 'Approved')">Approve</button>
+                              <button class="btn btn-danger btn-sm" onclick="updateLeaveStatus(${l.id}, 'Rejected')">Reject</button>
+                            ` : `
+                              <span style="font-size:0.8125rem;color:var(--color-text-muted)">--</span>
+                            `}
+                          </div>
+                        </td>
+                      </tr>
+                    `).join("")}
+                  </tbody>
+                </table>
+              </div>
+              <div class="card-footer" style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:0.8125rem;color:var(--color-text-secondary)">Showing ${leaves.length} requests</span>
+              </div>
+            </div>
+          </div>
+        </main>
+      `;
+    }
+
+    function updateLeaveStatus(id, newStatus) {
+      const leaves = getLeaves();
+      const leave = leaves.find(l => l.id === id);
+      if (leave) {
+        leave.status = newStatus;
+        saveLeaves(leaves);
+        showToast(`Leave request ${newStatus.toLowerCase()} successfully`, newStatus === "Approved" ? "success" : "info");
+        renderAdminLeave();
+        initSidebar();
+      }
+    }
+
+    // ===== Employee Leave Application =====
+    function renderEmployeeLeave() {
+      const leaves = getLeaves();
+      const empName = user.employeeData ? user.employeeData.name : user.name;
+      const myLeaves = leaves.filter(l => l.employeeName === empName);
+
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("employee", "apply-leave")}
+        <main class="main-content">
+          ${renderTopbar("Apply Leave", "Employee / Leave")}
+          <div class="content-area">
+            <div class="page-header">
+              <div>
+                <h2>Apply for Leave</h2>
+                <p>Submit a new leave request and track existing ones.</p>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div class="card">
+                <div class="card-header">
+                  <h3>New Leave Request</h3>
+                </div>
+                <div class="card-body">
+                  <form id="leaveForm">
+                    <div class="form-group">
+                      <label for="leaveType">Leave Type</label>
+                      <select id="leaveType" class="form-control" required>
+                        <option value="">Select leave type</option>
+                        <option value="Sick Leave">Sick Leave</option>
+                        <option value="Casual Leave">Casual Leave</option>
+                        <option value="Vacation">Vacation</option>
+                        <option value="Personal Leave">Personal Leave</option>
+                        <option value="Maternity/Paternity">Maternity/Paternity</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="leaveStart">Start Date</label>
+                      <input type="date" id="leaveStart" class="form-control" required />
+                    </div>
+                    <div class="form-group">
+                      <label for="leaveEnd">End Date</label>
+                      <input type="date" id="leaveEnd" class="form-control" required />
+                    </div>
+                    <div class="form-group">
+                      <label for="leaveReason">Reason</label>
+                      <textarea id="leaveReason" class="form-control" placeholder="Briefly describe your reason for leave..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+                      Submit Request
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-header">
+                  <h3>My Leave History</h3>
+                </div>
+                ${myLeaves.length > 0 ? `
+                <div class="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${myLeaves.map(l => `
+                        <tr>
+                          <td>${l.type}</td>
+                          <td>${formatDate(l.startDate)}</td>
+                          <td>${formatDate(l.endDate)}</td>
+                          <td>${getStatusBadge(l.status)}</td>
+                        </tr>
+                      `).join("")}
+                    </tbody>
+                  </table>
+                </div>
+                ` : `
+                <div class="card-body">
+                  <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <h4>No leave history</h4>
+                    <p>Submit your first leave request.</p>
+                  </div>
+                </div>
+                `}
+              </div>
+            </div>
+          </div>
+        </main>
+      `;
+
+      document.getElementById("leaveForm").addEventListener("submit", function(e) {
+        e.preventDefault();
+        const leaves = getLeaves();
+        const empName = user.employeeData ? user.employeeData.name : user.name;
+
+        const startDate = document.getElementById("leaveStart").value;
+        const endDate = document.getElementById("leaveEnd").value;
+
+        if (endDate < startDate) {
+          showToast("End date cannot be before start date", "error");
+          return;
+        }
+
+        const newLeave = {
+          id: leaves.length > 0 ? Math.max(...leaves.map(l => l.id)) + 1 : 1,
+          employeeName: empName,
+          type: document.getElementById("leaveType").value,
+          startDate: startDate,
+          endDate: endDate,
+          reason: document.getElementById("leaveReason").value.trim(),
+          status: "Pending",
+        };
+
+        leaves.push(newLeave);
+        saveLeaves(leaves);
+        showToast("Leave request submitted successfully!", "success");
+        this.reset();
+        renderEmployeeLeave();
+        initSidebar();
+      });
+    }
+  </script>
+</body>
+</html>
