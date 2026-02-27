@@ -1,1 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Suite - Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="login-logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </div>
+        <h1>HR Suite</h1>
+      </div>
+      <p class="login-subtitle">Sign in to your HR management dashboard</p>
+
+      <form id="loginForm" autocomplete="off">
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" class="form-control" placeholder="you@company.com" required />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" class="form-control" placeholder="Enter your password" required />
+        </div>
+
+        <div class="form-group">
+          <label for="role">Login As</label>
+          <select id="role" class="form-control" required>
+            <option value="">Select your role</option>
+            <option value="admin">Admin / HR</option>
+            <option value="employee">Employee</option>
+          </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" style="margin-top: 8px; padding: 12px 20px; font-size: 0.9375rem;">
+          Sign In
+        </button>
+      </form>
+
+      <p style="text-align:center; margin-top: 24px; font-size: 0.8125rem; color: var(--color-text-muted);">
+        Demo: Use any email and password to login.
+      </p>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    // If already logged in, redirect
+    const existingUser = getCurrentUser();
+    if (existingUser) {
+      window.location.href = "dashboard.html";
+    }
+
+    document.getElementById("loginForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const role = document.getElementById("role").value;
+
+      if (!email || !password || !role) {
+        showToast("Please fill in all fields", "error");
+        return;
+      }
+
+      // Determine user name from email
+      const namePart = email.split("@")[0];
+      const name = namePart.charAt(0).toUpperCase() + namePart.slice(1).replace(/[._]/g, " ");
+
+      const user = {
+        email: email,
+        name: role === "admin" ? "Admin User" : name,
+        role: role,
+      };
+
+      // If employee, also store employee data
+      if (role === "employee") {
+        const employees = getEmployees();
+        const match = employees.find(emp => emp.email.toLowerCase() === email.toLowerCase());
+        if (match) {
+          user.name = match.name;
+          user.employeeData = match;
+        } else {
+          // Create a default profile
+          user.employeeData = {
+            id: employees.length + 1,
+            name: name,
+            email: email,
+            department: "General",
+            designation: "Employee",
+            salary: "60,000",
+            joiningDate: "2024-01-15",
+          };
+        }
+      }
+
+      sessionStorage.setItem("hr_user", JSON.stringify(user));
+      showToast("Login successful! Redirecting...", "success");
+
+      setTimeout(() => {
+        window.location.href = "dashboard.html";
+      }, 600);
+    });
+  </script>
+</body>
+</html>
 
