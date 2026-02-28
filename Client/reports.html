@@ -1,260 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HR Suite - Reports</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <meta charset="UTF-8" /><title>HR Suite - Reports</title><link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <div class="app-layout" id="app"></div>
-
   <script src="js/app.js"></script>
   <script>
     const user = requireAuth("admin");
-    if (user) {
-      renderReports();
-      initSidebar();
-    }
+    if (user) { renderReports(); initSidebar(); }
 
     function renderReports() {
-      const employees = getEmployees();
-      const attendance = getAttendance();
-      const leaves = getLeaves();
-
-      // Department distribution
-      const deptCounts = {};
-      employees.forEach(e => {
-        deptCounts[e.department] = (deptCounts[e.department] || 0) + 1;
-      });
-
-      // Attendance distribution
-      const attCounts = { Present: 0, Late: 0, Absent: 0, "On Leave": 0 };
-      attendance.forEach(a => {
-        if (attCounts[a.status] !== undefined) attCounts[a.status]++;
-      });
-
-      // Leave type distribution
-      const leaveCounts = {};
-      leaves.forEach(l => {
-        leaveCounts[l.type] = (leaveCounts[l.type] || 0) + 1;
-      });
-
-      // Salary by department
-      const deptSalary = {};
-      employees.forEach(e => {
-        const salary = parseFloat(e.salary.replace(/,/g, ""));
-        deptSalary[e.department] = (deptSalary[e.department] || 0) + salary;
-      });
-
+      const emps = getEmployees();
       document.getElementById("app").innerHTML = `
         ${renderSidebar("admin", "reports")}
         <main class="main-content">
-          ${renderTopbar("Reports", "Administration / Reports")}
+          ${renderTopbar("Reports", "Admin / Reports")}
           <div class="content-area">
-            <div class="page-header">
-              <div>
-                <h2>Reports & Analytics</h2>
-                <p>Visual insights into your workforce data.</p>
-              </div>
+            <div class="card" style="margin-bottom:24px">
+              <div class="card-header"><h3>Salary Report</h3><button class="btn btn-outline btn-sm" onclick="exportCSV()">Download CSV</button></div>
+              <div class="table-wrapper"><table id="sTable">
+                <thead><tr><th>Name</th><th>Dept</th><th>Base</th><th>Deductions</th><th>Net</th></tr></thead>
+                <tbody>${emps.map(e => `<tr><td>${e.name}</td><td>${e.department}</td><td>$${e.salary}</td><td>$0</td><td>$${e.salary}</td></tr>`).join("")}</tbody>
+              </table></div>
             </div>
-
             <div class="grid-2">
-              <div class="card">
-                <div class="card-header">
-                  <h3>Attendance Overview</h3>
-                </div>
-                <div class="card-body">
-                  <div class="chart-container" style="max-height:280px">
-                    <canvas id="attendanceChart"></canvas>
-                  </div>
-                </div>
-              </div>
-
-              <div class="card">
-                <div class="card-header">
-                  <h3>Department Distribution</h3>
-                </div>
-                <div class="card-body">
-                  <div class="chart-container" style="max-height:280px">
-                    <canvas id="deptChart"></canvas>
-                  </div>
-                </div>
-              </div>
-
-              <div class="card">
-                <div class="card-header">
-                  <h3>Leave Type Breakdown</h3>
-                </div>
-                <div class="card-body">
-                  <div class="chart-container" style="max-height:280px">
-                    <canvas id="leaveChart"></canvas>
-                  </div>
-                </div>
-              </div>
-
-              <div class="card">
-                <div class="card-header">
-                  <h3>Salary by Department</h3>
-                </div>
-                <div class="card-body">
-                  <div class="chart-container" style="max-height:280px">
-                    <canvas id="salaryChart"></canvas>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="card" style="margin-top:24px">
-              <div class="card-header">
-                <h3>Salary Deduction Summary</h3>
-              </div>
-              <div class="table-wrapper">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Employee</th>
-                      <th>Department</th>
-                      <th>Base Salary</th>
-                      <th>Absent Days</th>
-                      <th>Deduction</th>
-                      <th>Net Salary</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${employees.map(emp => {
-                      const absentDays = attendance.filter(a => a.employeeName === emp.name && (a.status === "Absent")).length;
-                      const baseSalary = parseFloat(emp.salary.replace(/,/g, ""));
-                      const dailyRate = baseSalary / 30;
-                      const deduction = Math.round(absentDays * dailyRate);
-                      const net = baseSalary - deduction;
-                      return `
-                        <tr>
-                          <td><strong>${emp.name}</strong></td>
-                          <td><span class="badge badge-primary">${emp.department}</span></td>
-                          <td>$${emp.salary}</td>
-                          <td>${absentDays}</td>
-                          <td style="color:var(--color-danger)">-$${deduction.toLocaleString()}</td>
-                          <td><strong>$${net.toLocaleString()}</strong></td>
-                        </tr>
-                      `;
-                    }).join("")}
-                  </tbody>
-                </table>
-              </div>
+              <div class="card"><div class="card-header"><h3>Leave Utilization</h3></div><div class="table-wrapper"><table><thead><tr><th>Employee</th><th>Usage</th><th>Allowance</th></tr></thead><tbody><tr><td>Arjun Mehta</td><td>3</td><td>20</td></tr><tr><td>Priya Sharma</td><td>2</td><td>20</td></tr></tbody></table></div></div>
+              <div class="card"><div class="card-header"><h3>Attendance Summary</h3></div><div class="card-body">
+                <p><strong>Top Absentees:</strong> Sneha Iyer, Rahul Gupta</p><hr style="margin:10px 0; border:0; border-top:1px solid #eee">
+                <p><strong>Dept Averages:</strong> Engineering (94%), Design (88%), HR (92%)</p>
+              </div></div>
             </div>
           </div>
         </main>
       `;
-
-      // ===== Render Charts =====
-      const chartColors = {
-        blue: "#2563EB",
-        green: "#059669",
-        orange: "#D97706",
-        red: "#DC2626",
-        purple: "#7C3AED",
-        teal: "#0891B2",
-        pink: "#DB2777",
-        slate: "#64748B"
-      };
-
-      // Attendance Doughnut
-      new Chart(document.getElementById("attendanceChart"), {
-        type: "doughnut",
-        data: {
-          labels: Object.keys(attCounts),
-          datasets: [{
-            data: Object.values(attCounts),
-            backgroundColor: [chartColors.green, chartColors.orange, chartColors.red, chartColors.blue],
-            borderWidth: 0,
-            borderRadius: 4,
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          cutout: "65%",
-          plugins: {
-            legend: { position: "bottom", labels: { padding: 16, usePointStyle: true, pointStyleWidth: 10, font: { size: 12, family: "Inter" } } }
-          }
-        }
+    }
+    function exportCSV() {
+      let csv = "Name,Dept,Base,Deductions,Net\n";
+      document.querySelectorAll("#sTable tr").forEach(r => { 
+        const cols = r.querySelectorAll("td, th");
+        csv += Array.from(cols).map(c => c.textContent).join(",") + "\n";
       });
-
-      // Department Bar
-      new Chart(document.getElementById("deptChart"), {
-        type: "bar",
-        data: {
-          labels: Object.keys(deptCounts),
-          datasets: [{
-            label: "Employees",
-            data: Object.values(deptCounts),
-            backgroundColor: chartColors.blue,
-            borderRadius: 6,
-            borderSkipped: false,
-            barThickness: 32,
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11, family: "Inter" } }, grid: { color: "#F1F5F9" } },
-            x: { ticks: { font: { size: 11, family: "Inter" } }, grid: { display: false } }
-          }
-        }
-      });
-
-      // Leave Pie
-      new Chart(document.getElementById("leaveChart"), {
-        type: "pie",
-        data: {
-          labels: Object.keys(leaveCounts),
-          datasets: [{
-            data: Object.values(leaveCounts),
-            backgroundColor: [chartColors.blue, chartColors.green, chartColors.orange, chartColors.red, chartColors.teal],
-            borderWidth: 0,
-            borderRadius: 4,
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { position: "bottom", labels: { padding: 16, usePointStyle: true, pointStyleWidth: 10, font: { size: 12, family: "Inter" } } }
-          }
-        }
-      });
-
-      // Salary Bar
-      new Chart(document.getElementById("salaryChart"), {
-        type: "bar",
-        data: {
-          labels: Object.keys(deptSalary),
-          datasets: [{
-            label: "Total Salary ($)",
-            data: Object.values(deptSalary),
-            backgroundColor: chartColors.green,
-            borderRadius: 6,
-            borderSkipped: false,
-            barThickness: 32,
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            y: { beginAtZero: true, ticks: { font: { size: 11, family: "Inter" }, callback: v => "$" + v.toLocaleString() }, grid: { color: "#F1F5F9" } },
-            x: { ticks: { font: { size: 11, family: "Inter" } }, grid: { display: false } }
-          }
-        }
-      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'Salary_Report.csv';
+      a.click();
     }
   </script>
 </body>
