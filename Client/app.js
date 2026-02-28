@@ -1,5 +1,3 @@
-// ===== HR Dashboard - Shared JavaScript =====
-
 // ===== Sample Data Store =====
 const DEFAULT_EMPLOYEES = [
   { id: 1, name: "Arjun Mehta", email: "arjun@company.com", department: "Engineering", designation: "Senior Developer", salary: "95,000", joiningDate: "2022-03-15" },
@@ -255,5 +253,3 @@ function getStatusBadge(status) {
   };
   return `<span class="badge ${map[status] || 'badge-primary'}">${status}</span>`;
 }
-
-
