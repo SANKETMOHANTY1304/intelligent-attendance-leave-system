@@ -1,0 +1,101 @@
+*
+{
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+}
+#main
+{
+    height: 100vh;
+    width: 100vw;
+    background-color: black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-image: url(./background.jpg);
+    object-fit: auto;
+    background-repeat: no-repeat;
+}
+#page
+{
+    height: 60vh;
+    width: 30vw;
+    background-color: #fff;
+    border-radius: 20px;
+    border: 5px solid blue;
+    transition: all 1s linear ;
+    z-index: 0;
+    position: relative;
+}
+#page:hover{
+    background-color:black;
+    border: 30px ;
+    color: #fff;
+    background-repeat: no-repeat;
+    object-fit: cover;
+}
+img{
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  z-index: 100;
+  position: absolute;
+  opacity: 0;
+  transition: all 1s linear;
+}
+#page:hover img{
+  opacity: 1;
+}
+#kk
+{
+  position: absolute;
+  z-index: 999;
+  padding: 50px;
+}
+input[type=text] {
+    border: 2px solid red;
+    border-radius: 4px;
+    font-size: 20px;
+    width: 80%;  
+  }
+  #username
+  {
+    margin: 0 auto;
+    font-size: 40px;
+  }
+  #usn
+  {
+    font-size: 40px;
+    padding: 100px 0px;
+    padding-top: 100px;
+    padding-bottom:200px;
+  }
+  #pswd{
+    margin: 0 auto;
+    font-size: 40px;
+    width: 80%;
+    border: 2px solid red;
+  }
+  #pass
+  {
+    font-size: 40px;
+  }
+  #sub
+  {
+    font-size: 30px;
+    border: 2px solid black;
+    width: 45%;
+    height:50px;
+    border-radius: 10px;
+    padding: 10px;
+    margin: 50px 0px 0px 90px ;
+    align-self: center;
+    transition: all 0.3s linear;
+  }
+  #sub:hover
+  {
+    scale: 1.1;
+    box-shadow:0px 0px 15px whitesmoke ;
+    opacity: 0.8;
+  }
+  

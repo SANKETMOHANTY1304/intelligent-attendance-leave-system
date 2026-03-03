@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Suite - My Profile</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* Styling for the interactive avatar */
+    .profile-avatar {
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    .profile-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .avatar-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+      font-size: 10px;
+      padding: 4px 0;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .profile-avatar:hover .avatar-overlay {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout" id="app"></div>
+  <script src="js/app.js"></script>
+  <script>
+    const user = requireAuth("employee");
+    if (user) {
+      // Access employee data synced from the main employee list
+      const emp = user.employeeData || {};
+      
+      // Use the name from the employee list if available, otherwise fallback to login name
+      const fullName = emp.name || user.name;
+      const initials = fullName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("employee", "my-profile")}
+        <main class="main-content">
+          ${renderTopbar("My Profile", "Profile")}
+          <div class="content-area">
+            <div class="card">
+              <div class="card-body" style="padding:32px">
+                <div class="profile-header">
+                  <div class="profile-avatar" id="avatarContainer" onclick="document.getElementById('profilePicInput').click()">
+                    ${emp.profilePic ? `<img src="${emp.profilePic}" alt="Profile">` : initials}
+                    <div class="avatar-overlay">Change</div>
+                  </div>
+                  <input type="file" id="profilePicInput" accept="image/*" style="display:none" onchange="handleProfilePic(this)">
+                  
+                  <div class="profile-info">
+                    <h2>${fullName}</h2>
+                    <p>${emp.designation || 'Employee'}</p>
+                    <p style="margin-top: 4px;"><span class="badge badge-success">Active</span></p>
+                  </div>
+                </div>
+
+                <h3>Personal Details</h3>
+                <div class="detail-grid" style="margin-top:20px">
+                  <div class="detail-item">
+                    <label>Full Name</label>
+                    <span>${fullName}</span>
+                  </div>
+
+                  <div class="detail-item">
+                    <label>Email Address</label>
+                    <span>${user.email}</span>
+                  </div>
+
+                  <div class="detail-item">
+                    <label>Designation</label>
+                    <span>${emp.designation || 'General Staff'}</span>
+                  </div>
+
+                  <div class="detail-item">
+                    <label>Department</label>
+                    <span>${emp.department || 'General'}</span>
+                  </div>
+
+                  <div class="detail-item">
+                    <label>Annual Salary</label>
+                    <span>$${emp.salary || '0.00'}</span>
+                  </div>
+
+                  <div class="detail-item">
+                    <label>Joining Date</label>
+                    <span>${formatDate(emp.joiningDate || '2024-01-01')}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      `;
+      initSidebar();
+    }
+
+    // Feature to handle image upload and persistence
+    function handleProfilePic(input) {
+      if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const base64Image = e.target.result;
+          
+          // Update Session Storage (Current login state)
+          const currentUser = JSON.parse(sessionStorage.getItem("hr_user"));
+          currentUser.employeeData.profilePic = base64Image;
+          sessionStorage.setItem("hr_user", JSON.stringify(currentUser));
+
+          // Update Local Storage (Main employee directory)
+          const employees = getEmployees();
+          const empIndex = employees.findIndex(e => e.email.toLowerCase() === currentUser.email.toLowerCase());
+          if (empIndex !== -1) {
+            employees[empIndex].profilePic = base64Image;
+            saveEmployees(employees);
+          }
+
+          // Update UI instantly
+          const container = document.getElementById("avatarContainer");
+          container.innerHTML = `<img src="${base64Image}" alt="Profile"><div class="avatar-overlay">Change</div>`;
+          showToast("Profile picture updated successfully!", "success");
+        };
+        reader.readAsDataURL(input.files[0]);
+      }
+    }
+  </script>
+</body>
+</html>

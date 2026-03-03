@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Career Compass - Your AI Guidance</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Career Compass</h1>
+    <p>Find your perfect career path with AI guidance.</p>
+  </header>
+  <main>
+    <section class="profile">
+      <h2>Your Profile</h2>
+      <form id="profile-form">
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" required>
+        <label for="interests">Areas of Interest (separate by commas):</label>
+        <textarea id="interests" name="interests" required></textarea>
+        <label for="academics">Academic History (e.g., GPA, relevant coursework):</label>
+        <textarea id="academics" name="academics" required></textarea>
+        <button type="submit">Analyze My Profile</button>
+      </form>
+    </section>
+    <section class="results" style="display: none;">
+      <h2>Your Career Path Options</h2>
+      <div id="prediction"></div>
+      <div id="recommendations"></div>
+    </section>
+  </main>
+  <footer>
+    <p>&copy; 2024 Career Compass</p>
+  </footer>
+  <script src="script.js"></script>
+</body>
+</html>
