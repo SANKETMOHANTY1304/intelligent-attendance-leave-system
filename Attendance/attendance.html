@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Suite - Attendance Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* Custom design tweaks for originality */
+    .insights-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .mini-stat {
+      background: white;
+      padding: 16px;
+      border-radius: var(--radius-sm);
+      border-left: 4px solid var(--color-primary);
+      box-shadow: var(--shadow-sm);
+    }
+    .filter-action-bar {
+      background: #f8fafc;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .split-layout {
+      display: grid;
+      grid-template-columns: 1.8fr 1fr;
+      gap: 24px;
+    }
+    .summary-box {
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      transition: transform 0.2s;
+    }
+    .summary-box:hover { transform: translateY(-3px); }
+  </style>
+</head>
+<body>
+  <div class="app-layout" id="app"></div>
+
+  <script src="js/app.js"></script>
+  <script>
+    const user = requireAuth();
+    if (user) { 
+      if (user.role === "admin") renderAdminAttendance(); 
+      else renderEmployeeAttendance();
+      initSidebar(); 
+    }
+
+    function renderAdminAttendance() {
+      const employees = getEmployees();
+      const att = getAttendance();
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Calculate real-time top-level stats
+      const todayRecords = att.filter(a => a.date === today);
+      const present = todayRecords.filter(a => a.status === "Present").length;
+      const late = todayRecords.filter(a => a.status === "Late").length;
+      const onLeave = todayRecords.filter(a => a.status === "On Leave").length;
+      const absent = employees.length - (present + late + onLeave);
+
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("admin", "attendance")}
+        <main class="main-content">
+          ${renderTopbar("Attendance Center", "Admin / Monitor")}
+          <div class="content-area">
+            
+            <div class="insights-strip">
+              <div class="mini-stat" style="border-color: #10b981">
+                <span style="font-size: 0.75rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Present Today</span>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #1e293b;">${present}</div>
+              </div>
+              <div class="mini-stat" style="border-color: #f59e0b">
+                <span style="font-size: 0.75rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Late Arrivals</span>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #1e293b;">${late}</div>
+              </div>
+              <div class="mini-stat" style="border-color: #ef4444">
+                <span style="font-size: 0.75rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Unplanned Absent</span>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #1e293b;">${absent}</div>
+              </div>
+              <div class="mini-stat" style="border-color: #3b82f6">
+                <span style="font-size: 0.75rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Approved Leave</span>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #1e293b;">${onLeave}</div>
+              </div>
+            </div>
+
+            <div class="split-layout">
+              
+              <div class="card">
+                <div class="card-header"><h3>Organization Pulse</h3></div>
+                <div class="filter-action-bar">
+                  <span style="font-size: 0.875rem; font-weight: 500;">Showing date:</span>
+                  <input type="date" id="dailyDatePick" class="form-control" value="${today}" style="max-width: 160px;">
+                  <button class="btn btn-primary btn-sm" onclick="loadDailyReport()">Refresh Records</button>
+                </div>
+                <div class="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Employee</th>
+                        <th style="text-align:center">In Time</th>
+                        <th style="text-align:center">Out Time</th>
+                        <th style="text-align:center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dailyReportTable"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-header"><h3>Monthly Insights</h3></div>
+                <div class="card-body">
+                  <p style="font-size: 0.8125rem; color: #64748b; margin-bottom: 16px;">Select an individual to view their monthly performance trends.</p>
+                  
+                  <div style="margin-bottom: 20px;">
+                    <label style="font-size: 0.75rem; font-weight: 700; display:block; margin-bottom: 4px;">Employee</label>
+                    <select id="sumEmp" class="form-control">
+                      <option value="">Choose Employee...</option>
+                      ${employees.map(e => `<option value="${e.name}">${e.name}</option>`).join("")}
+                    </select>
+                  </div>
+
+                  <div style="margin-bottom: 24px;">
+                    <label style="font-size: 0.75rem; font-weight: 700; display:block; margin-bottom: 4px;">Select Month</label>
+                    <div style="display: flex; gap: 8px;">
+                      <input type="month" id="sumMonth" class="form-control" value="${today.substring(0,7)}">
+                      <button class="btn btn-outline btn-sm" onclick="loadMonthlySummary()">Analyze</button>
+                    </div>
+                  </div>
+
+                  <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div id="boxPres" class="summary-box" style="background:#f0fdf4; border: 1px solid #bbf7d0; color:#166534;">
+                      <div style="font-size: 0.75rem; font-weight: 600;">Days Present</div>
+                      <div id="valPres" style="font-size: 1.5rem; font-weight: 700;">--</div>
+                    </div>
+                    <div id="boxAbs" class="summary-box" style="background:#fef2f2; border: 1px solid #fecaca; color:#991b1b;">
+                      <div style="font-size: 0.75rem; font-weight: 600;">Days Absent</div>
+                      <div id="valAbs" style="font-size: 1.5rem; font-weight: 700;">--</div>
+                    </div>
+                    <div id="boxHalf" class="summary-box" style="background:#fffbeb; border: 1px solid #fef3c7; color:#92400e;">
+                      <div style="font-size: 0.75rem; font-weight: 600;">Late Arrivals</div>
+                      <div id="valHalf" style="font-size: 1.5rem; font-weight: 700;">--</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </main>
+      `;
+      loadDailyReport();
+    }
+
+    // Dynamic Functions for Admin Controls
+    window.loadDailyReport = function() {
+      const selectedDate = document.getElementById("dailyDatePick").value;
+      const attendance = getAttendance();
+      const employees = getEmployees();
+      const tbody = document.getElementById("dailyReportTable");
+      
+      tbody.innerHTML = employees.map(emp => {
+        const record = attendance.find(a => a.employeeName === emp.name && a.date === selectedDate);
+        const status = record ? getStatusBadge(record.status) : `<span class="badge badge-danger">Absent</span>`;
+        return `
+          <tr>
+            <td><strong>${emp.name}</strong><br><small style="color:#64748b">${emp.department}</small></td>
+            <td style="text-align:center">${record ? record.checkIn : '--'}</td>
+            <td style="text-align:center">${record ? record.checkOut : '--'}</td>
+            <td style="text-align:center">${status}</td>
+          </tr>
+        `;
+      }).join("");
+    };
+
+    window.loadMonthlySummary = function() {
+      const empName = document.getElementById("sumEmp").value;
+      const monthStr = document.getElementById("sumMonth").value;
+      if (!empName) { showToast("Please select an employee", "error"); return; }
+
+      const records = getAttendance().filter(a => a.employeeName === empName && a.date.startsWith(monthStr));
+      
+      document.getElementById("valPres").innerText = records.filter(a => a.status === "Present").length;
+      document.getElementById("valAbs").innerText = records.filter(a => a.status === "Absent").length;
+      document.getElementById("valHalf").innerText = records.filter(a => a.status === "Late").length;
+      
+      showToast(`Analysis complete for ${empName}`, "success");
+    };
+
+    function renderEmployeeAttendance() { 
+      /* Keep your original employee attendance code here */ 
+    }
+  </script>
+</body>
+</html>

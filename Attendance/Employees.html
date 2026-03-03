@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><title>HR Suite - Employees</title><link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app-layout" id="app"></div>
+  <script src="js/app.js"></script>
+  <script>
+    const user = requireAuth("admin");
+    if (user) { renderPage(); initSidebar(); }
+
+    function renderPage() {
+      const employees = getEmployees();
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("admin", "employees")}
+        <main class="main-content">
+          ${renderTopbar("Employees", "Administration / Employees")}
+          <div class="content-area">
+            <div class="page-header">
+              <div><h2>Employee Directory</h2><p>View organization members.</p></div>
+              <div style="display:flex; gap:12px">
+                <input type="text" id="empSearch" class="form-control" placeholder="Search by name..." onkeyup="filterEmp()" style="width:250px">
+                <button class="btn btn-primary">Search</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="table-wrapper">
+                <table>
+                  <thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Designation</th><th>Joining Date</th></tr></thead>
+                  <tbody id="empTable">
+                    ${employees.map(emp => `<tr><td><strong>${emp.name}</strong></td><td>${emp.email}</td><td><span class="badge badge-primary">${emp.department}</span></td><td>${emp.designation}</td><td>${formatDate(emp.joiningDate)}</td></tr>`).join("")}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </main>
+      `;
+    }
+
+    function filterEmp() {
+      const q = document.getElementById("empSearch").value.toLowerCase();
+      const rows = document.querySelectorAll("#empTable tr");
+      rows.forEach(r => {
+        const name = r.querySelector("td strong").textContent.toLowerCase();
+        r.style.display = name.includes(q) ? "" : "none";
+      });
+    }
+  </script>
+</body>
+</html>
