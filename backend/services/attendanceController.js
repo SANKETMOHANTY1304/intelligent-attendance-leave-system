@@ -1,10 +1,22 @@
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 
-// Helper: Check if date is weekend
+// IST offset: UTC+5:30 = 330 minutes
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+// Helper: Get current time in IST
+const getNowIST = () => {
+  const now = new Date();
+  // Shift time by IST offset to get the local IST time as a Date object
+  return new Date(now.getTime() + IST_OFFSET_MS);
+};
+
+// Helper: Check if a Date is a weekend in IST
 const isWeekend = (date) => {
-  const day = new Date(date).getDay();
-  return day === 0 || day === 6;
+  // Use IST-adjusted time to get correct day of week
+  const istDate = new Date(new Date(date).getTime() + IST_OFFSET_MS);
+  const day = istDate.getUTCDay(); // Use UTC methods on the IST-shifted date
+  return day === 0 || day === 6; // 0 = Sunday, 6 = Saturday
 };
 
 // Helper: Calculate work hours
@@ -13,46 +25,56 @@ const calculateWorkHours = (checkIn, checkOut) => {
   return ((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60));
 };
 
-// Helper: Get start and end of day
+// Helper: Get start and end of a day in IST (returned as UTC for DB comparison)
 const getDateRange = (date) => {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(date);
-  end.setHours(23, 59, 59, 999);
+  // Convert the UTC input date to IST date values
+  const istDate = new Date(new Date(date).getTime() + IST_OFFSET_MS);
+  const y = istDate.getUTCFullYear();
+  const m = istDate.getUTCMonth();
+  const day = istDate.getUTCDate();
+  // IST midnight (00:00 IST) in UTC = (00:00 IST) - 5h30m
+  const start = new Date(Date.UTC(y, m, day, 0, 0, 0, 0) - IST_OFFSET_MS);
+  // IST end of day (23:59:59 IST) in UTC
+  const end = new Date(Date.UTC(y, m, day, 23, 59, 59, 999) - IST_OFFSET_MS);
   return { start, end };
 };
 
-// Helper: Calculate status
+// Helper: Calculate status after checkout
 function calculateStatus(checkIn, checkOut) {
   const hours = calculateWorkHours(checkIn, checkOut);
   if (hours < 4) return "Half-day";
   return "Present";
 }
 
-// Helper to format time for display
+// Helper to format time for display in IST
 export const formatTime = (date) => {
   if (!date) return null;
   const d = new Date(date);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Kolkata'
+  });
 };
 
-const OFFICE_START_TIME = 12; // 12 PM
+const OFFICE_START_HOUR_IST = 9; // 9 AM IST is considered on-time
 
 // POST /api/attendance/checkin → Employee checks in
 export const checkIn = async (req, res) => {
   try {
     const employee_id = req.employee.id; // From JWT token via authEmployee middleware
-    const now = new Date();
+    const now = new Date(); // UTC time stored in DB
+    const nowIST = getNowIST(); // IST time for logic checks
 
-    // Check if today is a weekend
+    // Check if today is a weekend in IST
     if (isWeekend(now)) {
       return res.status(400).json({
         success: false,
-        message: "Check-in is not allowed on weekends"
+        message: "Check-in is not allowed on weekends (Saturday & Sunday)"
       });
     }
 
-    // Check if already checked in today
+    // Check if already checked in today (IST day boundary)
     const { start, end } = getDateRange(now);
     const existingAttendance = await Attendance.findOne({
       employee_id,
@@ -62,16 +84,16 @@ export const checkIn = async (req, res) => {
     if (existingAttendance) {
       return res.status(400).json({
         success: false,
-        message: "You have already checked in today"
+        message: "You have already checked in today",
+        checkIn: formatTime(existingAttendance.check_in),
+        status: existingAttendance.status
       });
     }
 
-    // Get today's date at office start time
-    const officeStart = new Date(now);
-    officeStart.setHours(OFFICE_START_TIME, 0, 0, 0);
-
+    // Determine status based on IST hour
+    const istHour = nowIST.getUTCHours(); // Hours in IST (since nowIST is UTC-shifted)
     let status = "Logged In";
-    if (now > officeStart) {
+    if (istHour >= OFFICE_START_HOUR_IST) {
       status = "Late";
     }
 
@@ -86,7 +108,7 @@ export const checkIn = async (req, res) => {
     await attendance.save();
     res.json({
       success: true,
-      message: "Checked in successfully",
+      message: `Checked in successfully at ${formatTime(now)}`,
       attendance: {
         date: attendance.date,
         checkIn: formatTime(attendance.check_in),
