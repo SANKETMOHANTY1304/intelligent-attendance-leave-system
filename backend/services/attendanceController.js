@@ -36,7 +36,7 @@ export const formatTime = (date) => {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
-const OFFICE_START_TIME = 10; // 12 AM
+const OFFICE_START_TIME = 12; // 12 PM
 
 // POST /api/attendance/checkin → Employee checks in
 export const checkIn = async (req, res) => {
