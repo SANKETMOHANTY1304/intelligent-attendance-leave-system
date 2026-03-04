@@ -1,39 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8" /><title>HR Suite - Employees</title><link rel="stylesheet" href="css/style.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Suite - Employees</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
 </head>
-<body>
+
+<body class="app-page">
   <div class="app-layout" id="app"></div>
+
+  <script src="api.js"></script>
   <script src="js/app.js"></script>
   <script>
     const user = requireAuth("admin");
-    if (user) { renderPage(); initSidebar(); }
 
-    function renderPage() {
-      const employees = getEmployees();
+    if (user) { loadAndRenderPage(); initSidebar(); }
+
+    async function loadAndRenderPage() {
+      try {
+        const employees = await apiGet(API.employees.all());
+        renderPage(employees);
+      } catch (error) {
+        console.error('Error loading employees:', error);
+        document.getElementById("app").innerHTML = `
+          ${renderSidebar("admin", "employees")}
+          <main class="main-content">
+            ${renderTopbar("Employees", "Administration / Employees")}
+            <div class="content-area">
+              <div class="card" style="padding:40px;text-align:center">
+                <p style="color:var(--color-danger)">Failed to load employees. Please try again.</p>
+                <button class="btn btn-primary" onclick="loadAndRenderPage()">Retry</button>
+              </div>
+            </div>
+          </main>
+        `;
+      }
+    }
+
+    function renderPage(employees) {
       document.getElementById("app").innerHTML = `
         ${renderSidebar("admin", "employees")}
         <main class="main-content">
           ${renderTopbar("Employees", "Administration / Employees")}
           <div class="content-area">
             <div class="page-header">
-              <div><h2>Employee Directory</h2><p>View organization members.</p></div>
+              <div><h2>Employee Directory</h2><p>View registered organization members.</p></div>
+              ${employees.length > 0 ? `
               <div style="display:flex; gap:12px">
                 <input type="text" id="empSearch" class="form-control" placeholder="Search by name..." onkeyup="filterEmp()" style="width:250px">
-                <button class="btn btn-primary">Search</button>
               </div>
+              ` : ''}
             </div>
+            ${employees.length === 0 ? `
+              <div class="card" style="padding: 60px 20px; text-align: center;">
+                <div class="empty-state">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: var(--color-text-muted); margin-bottom: 16px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  <h4>No Employees Registered</h4>
+                  <p>Employees will appear here once they register through the login page.</p>
+                </div>
+              </div>
+            ` : `
             <div class="card">
               <div class="table-wrapper">
                 <table>
-                  <thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Designation</th><th>Joining Date</th></tr></thead>
+                  <thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Designation</th><th>Salary</th><th>Joining Date</th></tr></thead>
                   <tbody id="empTable">
-                    ${employees.map(emp => `<tr><td><strong>${emp.name}</strong></td><td>${emp.email}</td><td><span class="badge badge-primary">${emp.department}</span></td><td>${emp.designation}</td><td>${formatDate(emp.joiningDate)}</td></tr>`).join("")}
+                    ${employees.map(emp => `<tr>
+                      <td><strong>${emp.name}</strong></td>
+                      <td>${emp.email}</td>
+                      <td><span class="badge badge-primary">${emp.department}</span></td>
+                      <td>${emp.designation || '<span style="color:var(--color-text-muted)">Not Assigned</span>'}</td>
+                      <td>${emp.base_salary ? '\u20B9' + emp.base_salary : '<span style="color:var(--color-text-muted)">Not Assigned</span>'}</td>
+                      <td>${formatDate(emp.joining_date)}</td>
+                    </tr>`).join("")}
                   </tbody>
                 </table>
               </div>
             </div>
+            `}
           </div>
         </main>
       `;
@@ -49,4 +98,5 @@
     }
   </script>
 </body>
+
 </html>

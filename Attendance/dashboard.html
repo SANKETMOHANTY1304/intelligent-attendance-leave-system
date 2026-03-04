@@ -1,31 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>HR Suite - Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body>
+
+<body class="app-page">
   <div class="app-layout" id="app"></div>
+  <script src="api.js"></script>
   <script src="js/app.js"></script>
+  <script src="sidebar.js"></script>
   <script>
     const user = requireAuth();
-    let trendChart; 
+    let trendChart;
+    let currentTrendView = 'monthly'; // 'monthly' or 'yearly'
 
     if (user) {
-      if (user.role === "admin") renderAdminDashboard();
-      else renderEmployeeDashboard();
+      if (user.role === "admin") loadAndRenderAdminDashboard();
+      else loadAndRenderEmployeeDashboard();
       initSidebar();
     }
 
     // ===== Admin Dashboard =====
-    function renderAdminDashboard() {
-      const employees = getEmployees();
-      const attendance = getAttendance();
-      const leaves = getLeaves();
-      const onLeaveToday = attendance.filter(a => a.status === "On Leave").length;
+    async function loadAndRenderAdminDashboard() {
+      // Show loading state
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("admin", "dashboard")}
+        <main class="main-content">
+          ${renderTopbar("Dashboard", "Home / Dashboard")}
+          <div class="content-area">
+            <div style="padding:60px 20px;text-align:center">
+              <div class="spinner"></div>
+              <p>Loading dashboard...</p>
+            </div>
+          </div>
+        </main>
+      `;
+
+      try {
+        const dashboardData = await getDashboardData(currentTrendView);
+        renderAdminDashboard(dashboardData);
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+        document.querySelector('.content-area').innerHTML = `
+          <div class="card" style="padding:40px;text-align:center">
+            <p style="color:var(--color-danger)">Failed to load dashboard. Please try again.</p>
+            <button class="btn btn-primary" onclick="loadAndRenderAdminDashboard()">Retry</button>
+          </div>
+        `;
+      }
+    }
+
+    function renderAdminDashboard(data) {
+      if (!data) {
+        document.querySelector('.content-area').innerHTML = `
+          <div class="card" style="padding:40px;text-align:center">
+            <p>No data available yet. Please register employees and mark attendance.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const stats = data.stats || {};
+      const trends = data.trends || {};
+      const departments = data.departments || [];
 
       document.getElementById("app").innerHTML = `
         ${renderSidebar("admin", "dashboard")}
@@ -35,19 +80,19 @@
             <div class="stats-grid">
               <div class="stat-card">
                 <div class="stat-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
-                <div class="stat-info"><h4>Total Employees</h4><div class="stat-value">${employees.length}</div></div>
+                <div class="stat-info"><h4>Total Employees</h4><div class="stat-value">${stats.totalEmployees || 0}</div></div>
               </div>
               <div class="stat-card">
                 <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-                <div class="stat-info"><h4>Present Today</h4><div class="stat-value">${attendance.filter(a => a.status === "Present").length}</div></div>
+                <div class="stat-info"><h4>Avg Attendance</h4><div class="stat-value">${stats.averageAttendance || 0}%</div></div>
               </div>
               <div class="stat-card">
                 <div class="stat-icon red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/></svg></div>
-                <div class="stat-info"><h4>On Leave Today</h4><div class="stat-value">${onLeaveToday}</div></div>
+                <div class="stat-info"><h4>On Leave</h4><div class="stat-value">${stats.onLeaveToday || 0}</div></div>
               </div>
               <div class="stat-card">
                 <div class="stat-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
-                <div class="stat-info"><h4>Pending Approvals</h4><div class="stat-value">${leaves.filter(l => l.status === "Pending").length}</div></div>
+                <div class="stat-info"><h4>Pending Requests</h4><div class="stat-value">${stats.pendingLeaves || 0}</div></div>
               </div>
             </div>
 
@@ -55,84 +100,129 @@
               <div class="card">
                 <div class="card-header">
                   <h3>Attendance Trend</h3>
-                  <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-outline btn-sm active" id="btnMonthly" onclick="switchTrend('monthly')">Monthly</button>
-                    <button class="btn btn-outline btn-sm" id="btnYearly" onclick="switchTrend('yearly')">Yearly</button>
+                  <div class="toggle-group">
+                    <button class="toggle-btn ${currentTrendView === 'monthly' ? 'active' : ''}" onclick="switchTrendView('monthly')">Monthly</button>
+                    <button class="toggle-btn ${currentTrendView === 'yearly' ? 'active' : ''}" onclick="switchTrendView('yearly')">Yearly</button>
                   </div>
                 </div>
-                <div class="card-body"><canvas id="lineChartTrend"></canvas></div>
+                <div class="card-body">
+                  <canvas id="lineChartTrend"></canvas>
+                </div>
               </div>
               <div class="card">
-                <div class="card-header"><h3>Department-wise Attendance %</h3></div>
-                <div class="card-body"><canvas id="barChartDept"></canvas></div>
+                <div class="card-header"><h3>Department Statistics</h3></div>
+                <div class="card-body">
+                  <canvas id="barChartDept"></canvas>
+                </div>
               </div>
             </div>
           </div>
         </main>
       `;
-      renderAdminCharts();
+
+      // Render charts with backend data
+      renderAdminCharts(trends, departments);
     }
 
-    function renderAdminCharts() {
-      const lineCtx = document.getElementById("lineChartTrend").getContext("2d");
-      trendChart = new Chart(lineCtx, {
-        type: 'line',
-        data: { 
-          labels: ['Oct', 'Nov', 'Dec', 'Jan', 'Feb'], 
-          datasets: [{ 
-            label: 'Attendance %', 
-            data: [85, 88, 82, 90, 94], 
-            borderColor: '#2563EB', 
-            fill: true, 
-            backgroundColor: 'rgba(37, 99, 235, 0.1)',
-            tension: 0.3
-          }] 
-        },
-        options: {
-          responsive: true,
-          scales: { y: { beginAtZero: false, max: 100 } }
-        }
-      });
-
-      new Chart(document.getElementById("barChartDept"), {
-        type: 'bar',
-        data: { labels: ['Eng', 'Design', 'HR', 'Finance'], datasets: [{ label: 'Attendance %', data: [92, 85, 95, 89], backgroundColor: '#059669' }] }
-      });
-    }
-
-    function switchTrend(view) {
-      document.getElementById('btnMonthly').classList.remove('active');
-      document.getElementById('btnYearly').classList.remove('active');
-      if (view === 'monthly') {
-        document.getElementById('btnMonthly').classList.add('active');
-        trendChart.data.labels = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb'];
-        trendChart.data.datasets[0].data = [85, 88, 82, 90, 94];
-      } else {
-        document.getElementById('btnYearly').classList.add('active');
-        trendChart.data.labels = ['2021', '2022', '2023', '2024', '2025'];
-        trendChart.data.datasets[0].data = [78, 82, 85, 89, 92];
+    function switchTrendView(view) {
+      currentTrendView = view;
+      if (trendChart) {
+        trendChart.destroy();
+        trendChart = null;
       }
-      trendChart.update();
+      loadAndRenderAdminDashboard();
+    }
+
+    function renderAdminCharts(trends, departments) {
+      // Trend chart
+      const lineCtx = document.getElementById("lineChartTrend");
+      if (lineCtx && trends && trends.labels && trends.data) {
+        trendChart = new Chart(lineCtx.getContext("2d"), {
+          type: 'line',
+          data: {
+            labels: trends.labels,
+            datasets: [{
+              label: 'Attendance %',
+              data: trends.data,
+              borderColor: '#2563EB',
+              fill: true,
+              backgroundColor: 'rgba(37, 99, 235, 0.1)',
+              tension: 0.3
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: { y: { beginAtZero: true, max: 100 } }
+          }
+        });
+      }
+
+      // Department chart
+      const barCtx = document.getElementById("barChartDept");
+      if (barCtx && departments && departments.length > 0) {
+        const deptLabels = departments.map(d => d.department);
+        const deptData = departments.map(d => d.attendancePercentage || 0);
+
+        new Chart(barCtx.getContext("2d"), {
+          type: 'bar',
+          data: {
+            labels: deptLabels,
+            datasets: [{
+              label: 'Attendance %',
+              data: deptData,
+              backgroundColor: ['#2563EB', '#059669', '#D97706', '#DC2626', '#7C3AED']
+            }]
+          },
+          options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }
+        });
+      }
     }
 
     // ===== Employee Dashboard =====
-    function renderEmployeeDashboard() {
-      const empData = user.employeeData || {};
-      const empName = empData.name || user.name;
-      
-      const allAttendance = getAttendance();
-      const myAttendance = allAttendance.filter(a => a.employeeName === empName);
-      const daysPresent = myAttendance.filter(a => a.status === "Present").length;
+    async function loadAndRenderEmployeeDashboard() {
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("employee", "dashboard")}
+        <main class="main-content">
+          ${renderTopbar("Dashboard", "Home / Dashboard")}
+          <div class="content-area">
+            <div style="padding:60px 20px;text-align:center">
+              <div class="spinner"></div>
+              <p>Loading dashboard...</p>
+            </div>
+          </div>
+        </main>
+      `;
 
-      const allLeaves = getLeaves();
-      const myLeaves = allLeaves
-        .filter(l => l.employeeName === empName)
-        .sort((a, b) => b.id - a.id);
+      try {
+        const [attendanceData, leaveData, leaveBalance] = await Promise.all([
+          getAttendanceHistory(),
+          getMyLeaves(),
+          getLeaveBalance()
+        ]);
 
-      const pendingLeavesCount = myLeaves.filter(l => l.status === "Pending").length;
-      const approvedLeavesCount = myLeaves.filter(l => l.status === "Approved").length;
-      const leaveBalance = 20 - approvedLeavesCount; // Assuming 20 days annual allowance
-      
+        renderEmployeeDashboard(attendanceData, leaveData, leaveBalance);
+      } catch (error) {
+        console.error('Error loading employee dashboard:', error);
+        document.querySelector('.content-area').innerHTML = `
+          <div class="card" style="padding:40px;text-align:center">
+            <p style="color:var(--color-danger)">Failed to load dashboard. Please try again.</p>
+            <button class="btn btn-primary" onclick="loadAndRenderEmployeeDashboard()">Retry</button>
+          </div>
+        `;
+      }
+    }
+
+    function renderEmployeeDashboard(attendance, leaves, balance) {
+      const daysPresent = attendance.filter(a => a.status === "Present" || a.status === "Late" || a.status === "Logged In").length;
+      const pendingLeavesCount = leaves.filter(l => l.status === "Pending").length;
+      const approvedLeavesCount = leaves.filter(l => l.status === "Approved").length;
+
+      // Backend getLeaveBalance returns: { success, employee_id, year, balance: { sick, casual, earned, unpaid } }
+      const bal = balance.balance || {};
+      const totalRemaining = (typeof bal.sick === 'number' ? bal.sick : 0)
+        + (typeof bal.casual === 'number' ? bal.casual : 0)
+        + (typeof bal.earned === 'number' ? bal.earned : 0);
+
       document.getElementById("app").innerHTML = `
         ${renderSidebar("employee", "dashboard")}
         <main class="main-content">
@@ -163,7 +253,7 @@
                 <div class="stat-icon red">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                 </div>
-                <div class="stat-info"><h4>Leave Balance</h4><div class="stat-value">${leaveBalance}</div></div>
+                <div class="stat-info"><h4>Leave Balance</h4><div class="stat-value">${totalRemaining}</div></div>
               </div>
             </div>
 
@@ -187,23 +277,19 @@
                         <th>Type</th>
                         <th>Start</th>
                         <th>Status</th>
-                        <th>Rejection Reason</th>
                       </tr>
                     </thead>
                     <tbody>
-                      ${myLeaves.slice(0, 5).map(l => `
+                      ${leaves.slice(0, 5).map(l => `
                         <tr>
-                          <td>${l.type}</td>
-                          <td>${formatDate(l.startDate)}</td>
+                          <td>${l.leave_type || l.type || '-'}</td>
+                          <td>${formatDate(l.start_date || l.startDate)}</td>
                           <td>${getStatusBadge(l.status)}</td>
-                          <td style="color: var(--color-danger); font-size: 0.8125rem;">
-                            ${(l.status === 'Rejected' && l.rejectionReason) ? l.rejectionReason : "-"}
-                          </td>
                         </tr>
                       `).join("")}
                     </tbody>
                   </table>
-                  ${myLeaves.length === 0 ? '<p style="padding:20px; text-align:center; color:var(--color-text-muted);">No leave requests found.</p>' : ''}
+                  ${leaves.length === 0 ? '<p style="padding:20px; text-align:center; color:var(--color-text-muted);">No leave requests found.</p>' : ''}
                 </div>
               </div>
             </div>
@@ -213,4 +299,5 @@
     }
   </script>
 </body>
+
 </html>

@@ -1,77 +1,134 @@
-// ===== Sample Data Store =====
-const DEFAULT_EMPLOYEES = [
-  { id: 1, name: "Arjun Mehta", email: "arjun@company.com", department: "Engineering", designation: "Senior Developer", salary: "95,000", joiningDate: "2022-03-15" },
-  { id: 2, name: "Priya Sharma", email: "priya@company.com", department: "Design", designation: "UI/UX Lead", salary: "88,000", joiningDate: "2021-07-20" },
-  { id: 3, name: "Rahul Gupta", email: "rahul@company.com", department: "Marketing", designation: "Marketing Manager", salary: "82,000", joiningDate: "2023-01-10" },
-  { id: 4, name: "Sneha Iyer", email: "sneha@company.com", department: "HR", designation: "HR Specialist", salary: "75,000", joiningDate: "2022-09-05" },
-  { id: 5, name: "Vikram Patel", email: "vikram@company.com", department: "Engineering", designation: "Backend Developer", salary: "90,000", joiningDate: "2023-06-01" },
-  { id: 6, name: "Ananya Das", email: "ananya@company.com", department: "Finance", designation: "Financial Analyst", salary: "85,000", joiningDate: "2022-11-18" },
-  { id: 7, name: "Karthik Reddy", email: "karthik@company.com", department: "Engineering", designation: "DevOps Engineer", salary: "92,000", joiningDate: "2021-12-01" },
-  { id: 8, name: "Meera Joshi", email: "meera@company.com", department: "Support", designation: "Support Lead", salary: "70,000", joiningDate: "2023-04-12" },
-];
+// ===== BACKEND API INTEGRATION =====
+// All data now comes from the backend API
 
-const DEFAULT_ATTENDANCE = [
-  { id: 1, employeeName: "Arjun Mehta", date: "2026-02-25", checkIn: "09:05", checkOut: "18:10", status: "Present" },
-  { id: 2, employeeName: "Priya Sharma", date: "2026-02-25", checkIn: "09:00", checkOut: "18:00", status: "Present" },
-  { id: 3, employeeName: "Rahul Gupta", date: "2026-02-25", checkIn: "09:30", checkOut: "18:30", status: "Late" },
-  { id: 4, employeeName: "Sneha Iyer", date: "2026-02-25", checkIn: "--", checkOut: "--", status: "Absent" },
-  { id: 5, employeeName: "Vikram Patel", date: "2026-02-25", checkIn: "08:50", checkOut: "17:50", status: "Present" },
-  { id: 6, employeeName: "Ananya Das", date: "2026-02-25", checkIn: "09:15", checkOut: "18:15", status: "Present" },
-  { id: 7, employeeName: "Karthik Reddy", date: "2026-02-25", checkIn: "09:00", checkOut: "18:00", status: "Present" },
-  { id: 8, employeeName: "Meera Joshi", date: "2026-02-25", checkIn: "--", checkOut: "--", status: "On Leave" },
-];
-
-const DEFAULT_LEAVES = [
-  { id: 1, employeeName: "Arjun Mehta", type: "Sick Leave", startDate: "2026-02-20", endDate: "2026-02-21", reason: "Fever and cold", status: "Approved" },
-  { id: 2, employeeName: "Priya Sharma", type: "Casual Leave", startDate: "2026-03-01", endDate: "2026-03-02", reason: "Personal work", status: "Pending" },
-  { id: 3, employeeName: "Sneha Iyer", type: "Sick Leave", startDate: "2026-02-25", endDate: "2026-02-25", reason: "Doctor appointment", status: "Pending" },
-  { id: 4, employeeName: "Rahul Gupta", type: "Vacation", startDate: "2026-03-10", endDate: "2026-03-15", reason: "Family vacation", status: "Pending" },
-  { id: 5, employeeName: "Vikram Patel", type: "Casual Leave", startDate: "2026-02-18", endDate: "2026-02-18", reason: "Moving to a new apartment", status: "Rejected" },
-];
-
-// ===== Data Access =====
-function getEmployees() {
-  const stored = localStorage.getItem("hr_employees");
-  if (stored) return JSON.parse(stored);
-  localStorage.setItem("hr_employees", JSON.stringify(DEFAULT_EMPLOYEES));
-  return DEFAULT_EMPLOYEES;
+// ===== Data Access Functions (Using Backend APIs) =====
+async function getEmployees() {
+  try {
+    const response = await apiGet(API.employees.all());
+    // Backend findallEmployee returns a raw array directly
+    return Array.isArray(response) ? response : [];
+  } catch (error) {
+    console.error('Error fetching employees:', error);
+    showToast('Failed to load employees', 'error');
+    return [];
+  }
 }
 
-function saveEmployees(employees) {
-  localStorage.setItem("hr_employees", JSON.stringify(employees));
+async function getMyProfile() {
+  try {
+    const response = await apiGet(API.employees.profile());
+    // Backend getCurrentEmployeeProfile returns { success, data: {...} }
+    return response.data || null;
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    return null;
+  }
 }
 
+async function getDashboardData(type = 'monthly', year = null, month = null) {
+  const user = getCurrentUser();
+  const currentDate = new Date();
+  const currentYear = year || currentDate.getFullYear();
+  const currentMonth = month || (currentDate.getMonth() + 1);
+
+  let url;
+  if (user.role === 'admin') {
+    url = `${API.employees.adminDashboard()}?type=${type}&year=${currentYear}`;
+    if (type === 'monthly') url += `&month=${currentMonth}`;
+  } else {
+    url = `${API.employees.myDashboard()}?type=${type}&year=${currentYear}`;
+  }
+
+  try {
+    const response = await apiGet(url);
+    return response.dashboard;
+  } catch (error) {
+    console.error('Error fetching dashboard:', error);
+    showToast('Failed to load dashboard data', 'error');
+    return null;
+  }
+}
+
+async function getAttendanceHistory(month = null, year = null) {
+  try {
+    let url = API.attendance.history();
+    if (month && year) {
+      url += `?month=${month}&year=${year}`;
+    }
+    const response = await apiGet(url);
+    return response.attendance || [];
+  } catch (error) {
+    console.error('Error fetching attendance history:', error);
+    return [];
+  }
+}
+
+async function getMyLeaves() {
+  try {
+    const response = await apiGet(API.leaves.my());
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching my leaves:', error);
+    return [];
+  }
+}
+
+// Admin: get all leave requests (uses admin auth)
+async function getAllLeaves() {
+  try {
+    const response = await apiGet(API.leaves.all());
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching all leaves:', error);
+    return [];
+  }
+}
+
+async function getLeaveBalance() {
+  try {
+    const response = await apiGet(API.leaves.balance());
+    return response;
+  } catch (error) {
+    console.error('Error fetching leave balance:', error);
+    return { remaining: 0, used: 0, total: 0 };
+  }
+}
+
+// Deprecated localStorage functions (kept for backward compatibility)
 function getAttendance() {
-  const stored = localStorage.getItem("hr_attendance");
-  if (stored) return JSON.parse(stored);
-  localStorage.setItem("hr_attendance", JSON.stringify(DEFAULT_ATTENDANCE));
-  return DEFAULT_ATTENDANCE;
-}
-
-function saveAttendance(records) {
-  localStorage.setItem("hr_attendance", JSON.stringify(records));
+  console.warn('getAttendance() is deprecated. Use getAttendanceHistory() instead.');
+  return [];
 }
 
 function getLeaves() {
-  const stored = localStorage.getItem("hr_leaves");
-  if (stored) return JSON.parse(stored);
-  localStorage.setItem("hr_leaves", JSON.stringify(DEFAULT_LEAVES));
-  return DEFAULT_LEAVES;
+  console.warn('getLeaves() is deprecated. Use getMyLeaves() instead.');
+  return [];
+}
+
+function saveEmployees(employees) {
+  console.warn('saveEmployees() is deprecated. Data is now saved on the backend.');
+}
+
+function saveAttendance(records) {
+  console.warn('saveAttendance() is deprecated. Data is now saved on the backend.');
 }
 
 function saveLeaves(leaves) {
-  localStorage.setItem("hr_leaves", JSON.stringify(leaves));
+  console.warn('saveLeaves() is deprecated. Data is now saved on the backend.');
 }
 
 // ===== Auth =====
 function getCurrentUser() {
-  const stored = sessionStorage.getItem("hr_user");
+  const stored = localStorage.getItem("hr_user") || sessionStorage.getItem("hr_user");
   if (stored) return JSON.parse(stored);
   return null;
 }
 
 function logout() {
+  localStorage.removeItem("hr_user");
+  localStorage.removeItem("hr_token");
   sessionStorage.removeItem("hr_user");
+  sessionStorage.removeItem("hr_token");
   window.location.href = "login.html";
 }
 
@@ -154,7 +211,7 @@ function renderSidebar(role, activePage) {
 
   const adminNav = [
     { name: "Dashboard", icon: "grid", href: "dashboard.html" },
-    { name: "Employees", icon: "users", href: "employees.html" },
+    { name: "Employees", icon: "users", href: "Employees.html" },
     { name: "Attendance", icon: "clock", href: "attendance.html" },
     { name: "Leave Management", icon: "calendar", href: "leave.html" },
     { name: "Reports", icon: "chart", href: "reports.html" },
@@ -245,11 +302,21 @@ function getStatusBadge(status) {
   const map = {
     "Present": "badge-success",
     "Approved": "badge-success",
+    "Logged In": "badge-success",
     "Late": "badge-warning",
     "Pending": "badge-warning",
+    "Half-day": "badge-warning",
     "Absent": "badge-danger",
     "Rejected": "badge-danger",
     "On Leave": "badge-primary",
   };
   return `<span class="badge ${map[status] || 'badge-primary'}">${status}</span>`;
+}
+
+function showSpinner(el) {
+  el.innerHTML = `
+    <div style="padding:40px;text-align:center">
+      <div class="spinner"></div>
+      <p>Loading reports...</p>
+    </div>`;
 }

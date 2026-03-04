@@ -1,29 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8" /><title>HR Suite - Leaves</title><link rel="stylesheet" href="css/style.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Suite - Leaves</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
 </head>
-<body>
+
+<body class="app-page">
   <div class="app-layout" id="app"></div>
+  <script src="api.js"></script>
   <script src="js/app.js"></script>
   <script>
     const user = requireAuth();
-    if (user) { 
-      if (user.role === "admin") renderAdminLeave(); 
-      else renderEmployeeLeave();
-      initSidebar(); 
+    if (user) {
+      if (user.role === "admin") loadAndRenderAdminLeave();
+      else loadAndRenderEmployeeLeave();
+      initSidebar();
+    }
+
+    async function loadAndRenderAdminLeave() {
+      try {
+        const [leaves, employees] = await Promise.all([
+          getAllLeaves(),
+          apiGet(API.employees.all())
+        ]);
+        renderAdminLeave(leaves, employees);
+      } catch (error) {
+        console.error('Error loading admin leave data:', error);
+        document.getElementById("app").innerHTML = `
+          ${renderSidebar("admin", "leave-management")}
+          <main class="main-content">
+            ${renderTopbar("Leave Management", "Admin / Leaves")}
+            <div class="content-area">
+              <div class="card" style="padding:40px;text-align:center">
+                <p style="color:var(--color-danger)">Failed to load leave data. Please try again.</p>
+                <button class="btn btn-primary" onclick="loadAndRenderAdminLeave()">Retry</button>
+              </div>
+            </div>
+          </main>
+        `;
+      }
     }
 
     // ===== Admin Leave Management =====
-    function renderAdminLeave() {
-      const leaves = getLeaves();
-      const sortedLeaves = [...leaves].sort((a, b) => b.id - a.id);
+    function renderAdminLeave(leaves, employees) {
+      const sortedLeaves = [...leaves].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
       document.getElementById("app").innerHTML = `
         ${renderSidebar("admin", "leave-management")}
         <main class="main-content">
           ${renderTopbar("Leave Management", "Admin / Leaves")}
           <div class="content-area">
+            ${sortedLeaves.length === 0 ? `
+              <div class="card" style="padding: 60px 20px; text-align: center;">
+                <div class="empty-state">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: var(--color-text-muted); margin-bottom: 16px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <h4>No Leave Requests</h4>
+                  <p>No leave requests have been submitted yet. They will appear here once employees apply for leaves.</p>
+                </div>
+              </div>
+            ` : `
             <div class="card">
               <div class="table-wrapper">
                 <table>
@@ -33,42 +74,44 @@
                       <th>Type</th>
                       <th>Start</th>
                       <th>End</th>
-                      <th>Leave Pending</th>
+                      <th>Days</th>
                       <th>Status</th>
                       <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    ${sortedLeaves.map(l => `
+                    ${sortedLeaves.map(l => {
+        const empName = l.employee_id ? l.employee_id.name : 'Unknown';
+        return `
                       <tr>
-                        <td><strong>${l.employeeName}</strong></td>
-                        <td>${l.type}</td>
-                        <td>${formatDate(l.startDate)}</td>
-                        <td>${formatDate(l.endDate)}</td>
-                        <td>12 Days</td>
+                        <td><strong>${empName}</strong></td>
+                        <td>${l.leave_type}</td>
+                        <td>${formatDate(l.start_date)}</td>
+                        <td>${formatDate(l.end_date)}</td>
+                        <td>${l.number_of_days || '-'}</td>
                         <td>${getStatusBadge(l.status)}</td>
                         <td>
                           <div class="action-btns">
                             ${l.status === 'Pending' ? `
-                              <button class="btn btn-success btn-sm" onclick="updateLeave(${l.id}, 'Approved')">Accept</button>
-                              <button class="btn btn-danger btn-sm" onclick="updateLeave(${l.id}, 'Rejected')">Reject</button>
+                              <button class="btn btn-success btn-sm" onclick="updateLeave('${l._id}', 'Approved')">Accept</button>
+                              <button class="btn btn-danger btn-sm" onclick="updateLeave('${l._id}', 'Rejected')">Reject</button>
                             ` : `<span style="color: var(--color-text-muted); font-size: 0.8125rem;">Processed</span>`}
                           </div>
                         </td>
                       </tr>
-                    `).join("")}
+                    `}).join("")}
                   </tbody>
                 </table>
               </div>
             </div>
+            `}
           </div>
         </main>
       `;
     }
 
-    function updateLeave(id, status) {
-      const leaves = getLeaves();
-      const leave = leaves.find(l => l.id === id);
+    window.updateLeave = async function (id, status) {
+      let rejectionReason = '';
       if (status === 'Rejected') {
         const reason = prompt("Please provide a reason for rejection:");
         if (reason === null) return;
@@ -76,25 +119,52 @@
           showToast("A reason is required for rejection", "error");
           return;
         }
-        leave.rejectionReason = reason;
+        rejectionReason = reason;
       }
-      leave.status = status;
-      saveLeaves(leaves);
-      showToast(`Leave request ${status.toLowerCase()}`, "success");
-      renderAdminLeave();
-    }
+
+      try {
+        const endpoint = status === 'Approved' ? API.leaves.approve(id) : API.leaves.reject(id);
+        const body = status === 'Rejected' ? { rejection_reason: rejectionReason } : {};
+        await apiPut(endpoint, body);
+        showToast(`Leave request ${status.toLowerCase()}`, "success");
+        await loadAndRenderAdminLeave();
+      } catch (error) {
+        console.error('Error updating leave:', error);
+        showToast(error.message || "Failed to update leave", "error");
+      }
+    };
 
     // ===== Employee Leave Application =====
-    function renderEmployeeLeave() {
-      const leaves = getLeaves();
-      const empName = user.employeeData ? user.employeeData.name : user.name;
-      
-      // Calculate Dynamic Balances
-      const myApprovedLeaves = leaves.filter(l => l.employeeName === empName && l.status === "Approved");
-      
-      const sickUsed = myApprovedLeaves.filter(l => l.type === "Sick Leave").length;
-      const casualUsed = myApprovedLeaves.filter(l => l.type === "Casual Leave").length;
-      const earnedUsed = myApprovedLeaves.filter(l => l.type === "Earned Leave").length;
+    async function loadAndRenderEmployeeLeave() {
+      try {
+        const [leaves, balanceResponse] = await Promise.all([
+          getMyLeaves(),
+          getLeaveBalance()
+        ]);
+        renderEmployeeLeave(leaves, balanceResponse);
+      } catch (error) {
+        console.error('Error loading employee leave data:', error);
+        document.getElementById("app").innerHTML = `
+          ${renderSidebar("employee", "apply-leave")}
+          <main class="main-content">
+            ${renderTopbar("Apply Leave", "Employee / Leave")}
+            <div class="content-area">
+              <div class="card" style="padding:40px;text-align:center">
+                <p style="color:var(--color-danger)">Failed to load leave data. Please try again.</p>
+                <button class="btn btn-primary" onclick="loadAndRenderEmployeeLeave()">Retry</button>
+              </div>
+            </div>
+          </main>
+        `;
+      }
+    }
+
+    function renderEmployeeLeave(leaves, balanceResponse) {
+      // Backend getLeaveBalance returns: { success, employee_id, year, balance: { sick, casual, earned, unpaid } }
+      const bal = balanceResponse.balance || {};
+      const sickRemaining = bal.sick != null ? bal.sick : 10;
+      const casualRemaining = bal.casual != null ? bal.casual : 12;
+      const earnedRemaining = bal.earned != null ? bal.earned : 15;
 
       document.getElementById("app").innerHTML = `
         ${renderSidebar("employee", "apply-leave")}
@@ -109,7 +179,7 @@
                 </div>
                 <div class="stat-info">
                   <h4>Sick Leave</h4>
-                  <div class="stat-value">${10 - sickUsed} / 10</div>
+                  <div class="stat-value">${sickRemaining} / 10</div>
                 </div>
               </div>
               <div class="stat-card">
@@ -118,7 +188,7 @@
                 </div>
                 <div class="stat-info">
                   <h4>Casual Leave</h4>
-                  <div class="stat-value">${12 - casualUsed} / 12</div>
+                  <div class="stat-value">${casualRemaining} / 12</div>
                 </div>
               </div>
               <div class="stat-card">
@@ -127,7 +197,7 @@
                 </div>
                 <div class="stat-info">
                   <h4>Earned Leave</h4>
-                  <div class="stat-value">${15 - earnedUsed} / 15</div>
+                  <div class="stat-value">${earnedRemaining} / 15</div>
                 </div>
               </div>
             </div>
@@ -140,17 +210,18 @@
                     <div class="form-group">
                       <label>Leave Type</label>
                       <select id="lt" class="form-control" required>
-                        <option value="Sick Leave">Sick Leave</option>
-                        <option value="Earned Leave">Earned Leave</option>
-                        <option value="Casual Leave">Casual Leave</option>
-                        <option value="Unpaid Leave">Unpaid Leave</option>
+                        <option value="Sick">Sick Leave</option>
+                        <option value="Earned">Earned Leave</option>
+                        <option value="Casual">Casual Leave</option>
+                        <option value="Unpaid">Unpaid Leave</option>
                       </select>
                     </div>
                     <div class="form-group">
                       <label>Day Type</label>
-                      <select id="dt" class="form-control" required>
-                        <option value="Full Day">Full Day</option>
-                        <option value="Half Day">Half Day</option>
+                      <select id="dt" class="form-control">
+                        <option value="">Full Day</option>
+                        <option value="First-Half">First Half</option>
+                        <option value="Second-Half">Second Half</option>
                       </select>
                     </div>
                     <div class="grid-2">
@@ -170,29 +241,32 @@
         </main>
       `;
 
-      document.getElementById("lForm").onsubmit = (e) => { 
-        e.preventDefault(); 
-        const leaves = getLeaves();
-        const empName = user.employeeData ? user.employeeData.name : user.name;
-        
-        const newLeave = {
-          id: Date.now(),
-          employeeName: empName,
-          type: document.getElementById("lt").value,
-          dayType: document.getElementById("dt").value,
-          startDate: document.getElementById("sd").value,
-          endDate: document.getElementById("ed").value,
-          reason: document.getElementById("re").value,
-          status: "Pending",
-          rejectionReason: ""
+      document.getElementById("lForm").onsubmit = async (e) => {
+        e.preventDefault();
+        // Get employee ID from stored user data
+        const empId = user.employeeData ? user.employeeData.id : user.id;
+        const halfDay = document.getElementById("dt").value;
+
+        const leaveData = {
+          employee_id: empId,
+          leave_type: document.getElementById("lt").value,
+          start_date: document.getElementById("sd").value,
+          end_date: document.getElementById("ed").value,
+          half_day_type: halfDay || null,
+          reason: document.getElementById("re").value
         };
 
-        leaves.push(newLeave);
-        saveLeaves(leaves);
-        showToast("Leave request submitted successfully!", "success");
-        renderEmployeeLeave(); // Refresh cards immediately
+        try {
+          await apiPost(API.leaves.apply(), leaveData);
+          showToast("Leave request submitted successfully!", "success");
+          await loadAndRenderEmployeeLeave();
+        } catch (error) {
+          console.error('Error submitting leave:', error);
+          showToast(error.message || "Failed to submit leave request", "error");
+        }
       };
     }
   </script>
 </body>
+
 </html>

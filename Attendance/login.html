@@ -9,111 +9,72 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
-<body>
-  <div class="login-wrapper">
-    <div class="login-card">
-      <div class="login-logo">
-        <div class="login-logo-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-        </div>
-        <h1>HR Suite</h1>
-      </div>
-      <p class="login-subtitle">Sign in to your HR management dashboard</p>
+<body class="login-page">
 
-      <form id="loginForm" autocomplete="off">
-        <div class="form-group">
-          <label for="email">Email Address</label>
-          <input type="email" id="email" class="form-control" placeholder="you@company.com" required />
-        </div>
-
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input type="password" id="password" class="form-control" placeholder="Enter your password" required />
-        </div>
-
-        <div class="form-group">
-          <label for="role">Login As</label>
-          <select id="role" class="form-control" required>
-            <option value="">Select your role</option>
-            <option value="admin">Admin / HR</option>
-            <option value="employee">Employee</option>
-          </select>
-        </div>
-
-        <button type="submit" class="btn btn-primary btn-block" style="margin-top: 8px; padding: 12px 20px; font-size: 0.9375rem;">
-          Sign In
-        </button>
-      </form>
-
-      <p style="text-align:center; margin-top: 24px; font-size: 0.8125rem; color: var(--color-text-muted);">
-        Demo: Use any email and password to login.
-      </p>
+<div class="main">
+    <div class="left">
+        <div class="logo"></div>
+        <h1>
+            Manage Employee Attendance
+            With <span class="highlight">Smart Intelligence</span>
+        </h1>
+        <p>
+            Track attendance, manage employees, monitor work hours
+            and generate reports - all in one smart platform.
+        </p>
+        <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d" alt="Dashboard preview">
     </div>
-  </div>
 
-  <script src="js/app.js"></script>
-  <script>
-    // If already logged in, redirect
-    const existingUser = getCurrentUser();
-    if (existingUser) {
-      window.location.href = "dashboard.html";
-    }
+    <div class="right">
+        <div class="container">
+            <div id="loginForm" class="form-box">
+                <h2>Login</h2>
 
-    document.getElementById("loginForm").addEventListener("submit", function(e) {
-      e.preventDefault();
+                <label class="role-label">Login As</label>
+                <select id="loginRole" class="role-dropdown" onchange="onRoleChange()">
+                    <option value="employee">Employee</option>
+                    <option value="admin">Admin</option>
+                </select>
 
-      const email = document.getElementById("email").value.trim();
-      const password = document.getElementById("password").value;
-      const role = document.getElementById("role").value;
+                <input type="email" id="loginEmail" placeholder="Email">
+                <input type="password" id="loginPassword" placeholder="Password">
 
-      if (!email || !password || !role) {
-        showToast("Please fill in all fields", "error");
-        return;
-      }
+                <button type="button" onclick="login()">Login</button>
 
-      // Determine user name from email
-      const namePart = email.split("@")[0];
-      const name = namePart.charAt(0).toUpperCase() + namePart.slice(1).replace(/[._]/g, " ");
+                <p id="registerLink">No account?
+                    <span onclick="showRegister()">Register</span>
+                </p>
+            </div>
 
-      const user = {
-        email: email,
-        name: role === "admin" ? "Admin User" : name,
-        role: role,
-      };
+            <div id="registerForm" class="form-box hidden">
+                <h2>Employee Registration</h2>
 
-      // If employee, also store employee data
-      if (role === "employee") {
-        const employees = getEmployees();
-        const match = employees.find(emp => emp.email.toLowerCase() === email.toLowerCase());
-        if (match) {
-          user.name = match.name;
-          user.employeeData = match;
-        } else {
-          // Create a default profile
-          user.employeeData = {
-            id: employees.length + 1,
-            name: name,
-            email: email,
-            department: "General",
-            designation: "Employee",
-            salary: "60,000",
-            joiningDate: "2024-01-15",
-          };
-        }
-      }
+                <input type="text" id="regName" placeholder="Full Name *">
+                <input type="email" id="regEmail" placeholder="Email *">
+                <input type="password" id="regPassword" placeholder="Password *">
 
-      sessionStorage.setItem("hr_user", JSON.stringify(user));
-      showToast("Login successful! Redirecting...", "success");
+                <label class="role-label">Department *</label>
+                <select id="department" class="role-dropdown">
+                    <option value="">Select Department</option>
+                    <option value="IT">IT</option>
+                    <option value="HR">HR</option>
+                    <option value="Finance">Finance</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Operations">Operations</option>
+                </select>
 
-      setTimeout(() => {
-        window.location.href = "dashboard.html";
-      }, 600);
-    });
-  </script>
+                <button onclick="register()">Register</button>
+
+                <p>Already have account?
+                    <span onclick="showLogin()">Login</span>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="api.js"></script>
+<script src="js/login.js"></script>
+
 </body>
 </html>
