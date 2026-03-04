@@ -12,10 +12,8 @@ const calculateDays = (start, end, halfDayType) => {
 
 export const applyLeave = async (req, res) => {
   try {
-    // ✅ Always get employee_id from JWT token (not body) — prevents spoofing
-    const employee_id = req.employee.id;
-
     const {
+      employee_id,
       leave_type,
       start_date,
       end_date,
@@ -23,33 +21,18 @@ export const applyLeave = async (req, res) => {
       reason,
     } = req.body;
 
-    // Validate required fields
-    if (!leave_type || !start_date || !end_date || !reason) {
-      return res.status(400).json({ message: "Missing required fields: leave_type, start_date, end_date, reason" });
-    }
-
-    // ✅ Convert string dates to Date objects for reliable MongoDB comparison
-    const startDateObj = new Date(start_date);
-    const endDateObj = new Date(end_date);
-    startDateObj.setHours(0, 0, 0, 0);
-    endDateObj.setHours(23, 59, 59, 999);
-
-    if (startDateObj > endDateObj) {
-      return res.status(400).json({ message: "Start date cannot be after end date" });
-    }
-
-    // ✅ Overlap check using proper Date objects
+    // ✅ overlap check
     const overlap = await LeaveRequest.findOne({
-      employee_id: new mongoose.Types.ObjectId(employee_id),
+      employee_id,
       status: { $in: ["Pending", "Approved"] },
-      start_date: { $lte: endDateObj },
-      end_date: { $gte: startDateObj },
+      start_date: { $lte: end_date },
+      end_date: { $gte: start_date },
     });
 
     if (overlap) {
       return res
         .status(400)
-        .json({ message: `You already have a ${overlap.status} leave request overlapping these dates (${new Date(overlap.start_date).toDateString()} - ${new Date(overlap.end_date).toDateString()})` });
+        .json({ message: "Leave dates overlap" });
     }
 
     // ✅ get rule
@@ -64,10 +47,18 @@ export const applyLeave = async (req, res) => {
       half_day_type
     );
 
-    // ✅ yearly usage check (except unpaid) with proper Date objects
+    // ✅ yearly usage check (except unpaid)
     if (leave_type !== "Unpaid") {
-      const yearStart = new Date(startDateObj.getFullYear(), 0, 1);
-      const yearEnd = new Date(startDateObj.getFullYear(), 11, 31, 23, 59, 59);
+      const yearStart = new Date(
+        new Date(start_date).getFullYear(),
+        0,
+        1
+      );
+      const yearEnd = new Date(
+        new Date(start_date).getFullYear(),
+        11,
+        31
+      );
 
       const used = await LeaveRequest.aggregate([
         {
@@ -90,7 +81,7 @@ export const applyLeave = async (req, res) => {
 
       if (usedDays + requestedDays > rule.max_days_per_year) {
         return res.status(400).json({
-          message: `Exceeds yearly limit for ${leave_type}. Used: ${usedDays}, Requested: ${requestedDays}, Limit: ${rule.max_days_per_year}`,
+          message: `Exceeds yearly limit for ${leave_type}`,
         });
       }
     }
@@ -98,14 +89,14 @@ export const applyLeave = async (req, res) => {
     const leave = await LeaveRequest.create({
       employee_id,
       leave_type,
-      start_date: startDateObj,
-      end_date: endDateObj,
-      half_day_type: half_day_type || null,
+      start_date,
+      end_date,
+      half_day_type,
       reason,
       number_of_days: requestedDays,
     });
 
-    res.json({ success: true, id: leave._id, status: "Pending", message: "Leave request submitted successfully" });
+    res.json({ id: leave._id, status: "Pending" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
