@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Suite - My Profile</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body class="app-page">
+  <div class="app-layout" id="app"></div>
+
+  <!-- Edit Profile Modal -->
+  <div class="modal-overlay" id="editProfileModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Edit Profile</h3>
+        <button class="modal-close" onclick="closeModal('editProfileModal')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="assign-form-group">
+          <label>Full Name</label>
+          <input type="text" id="editName" placeholder="Full Name" required>
+        </div>
+        <div class="assign-form-group">
+          <label>Email Address</label>
+          <input type="email" id="editEmail" placeholder="Email" required>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('editProfileModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveProfile()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    const user = requireAuth("employee");
+    if (user) {
+      loadAndRenderProfile();
+      initSidebar();
+    }
+
+    async function loadAndRenderProfile() {
+      try {
+        const response = await apiGet(API.employees.profile());
+        renderProfile(response.data);
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        document.getElementById("app").innerHTML = `
+          ${renderSidebar("employee", "my-profile")}
+          <main class="main-content">
+            ${renderTopbar("My Profile", "Profile")}
+            <div class="content-area">
+              <div class="card" style="padding:40px;text-align:center">
+                <p style="color:var(--color-danger)">Failed to load profile. Please try again.</p>
+                <button class="btn btn-primary" onclick="loadAndRenderProfile()">Retry</button>
+              </div>
+            </div>
+          </main>
+        `;
+      }
+    }
+
+    function renderProfile(profileData = {}) {
+      const fullName = profileData.fullName || user.name;
+      const initials = fullName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+      const profilePhoto = profileData.profilePicture || '';
+
+      // Store for edit modal
+      window.currentProfileData = profileData;
+
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("employee", "my-profile")}
+        <main class="main-content">
+          ${renderTopbar("My Profile", "Profile")}
+          <div class="content-area">
+            <div class="card">
+              <div class="card-body" style="padding:32px">
+                <div class="profile-header">
+                  <div class="profile-avatar-wrapper" style="position:relative; cursor:pointer;" onclick="document.getElementById('photoUpload').click()">
+                    ${profilePhoto
+          ? `<img src="${profilePhoto}" class="profile-avatar-img" alt="Profile Photo" style="width:80px;height:80px;border-radius:50%;object-fit:cover;">`
+          : `<div class="profile-avatar">${initials}</div>`
+        }
+                    <div class="photo-upload-overlay" style="position:absolute;bottom:0;right:0;width:28px;height:28px;background:var(--color-primary);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    </div>
+                    <input type="file" id="photoUpload" accept="image/*" style="display:none" onchange="handlePhotoUpload(event)">
+                  </div>
+                  <div class="profile-info" style="flex:1">
+                    <h2>${fullName}</h2>
+                    <p>${profileData.designation || 'Employee'}</p>
+                    <p style="margin-top: 4px;"><span class="badge badge-success">Active</span></p>
+                  </div>
+                  <button class="btn btn-primary" onclick="openEditModal()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    Edit Profile
+                  </button>
+                </div>
+
+                <h3 style="color: var(--color-text);">Personal Details</h3>
+                <div class="detail-grid" style="margin-top:20px">
+                  <div class="detail-item">
+                    <label>Full Name</label>
+                    <span>${fullName}</span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Email Address</label>
+                    <span>${profileData.emailAddress || user.email}</span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Designation</label>
+                    <span>${profileData.designation || 'Not Assigned'}</span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Department</label>
+                    <span>${profileData.department || 'General'}</span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Monthly Salary</label>
+                    <span>${profileData.annualSalary ? '\u20B9' + profileData.annualSalary : 'Not Assigned'}</span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Joining Date</label>
+                    <span>${formatDate(profileData.joiningDate || new Date().toISOString().split('T')[0])}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      `;
+    }
+
+    // ===== Edit Profile Modal =====
+    function openEditModal() {
+      const pd = window.currentProfileData || {};
+      document.getElementById("editName").value = pd.fullName || user.name;
+      document.getElementById("editEmail").value = pd.emailAddress || user.email;
+      openModal('editProfileModal');
+    }
+
+    window.saveProfile = async function () {
+      const newName = document.getElementById("editName").value.trim();
+      const newEmail = document.getElementById("editEmail").value.trim();
+
+      if (!newName || !newEmail) {
+        showToast("Name and Email are required", "error");
+        return;
+      }
+
+      try {
+        // Backend expects { fullName, emailAddress }
+        await apiPut(API.employees.updateProfile(), {
+          fullName: newName,
+          emailAddress: newEmail.toLowerCase()
+        });
+
+        // Update local storage so sidebar/header reflect changes
+        const updatedUser = { ...user, name: newName, email: newEmail.toLowerCase() };
+        localStorage.setItem("hr_user", JSON.stringify(updatedUser));
+        sessionStorage.setItem("hr_user", JSON.stringify(updatedUser));
+
+        closeModal('editProfileModal');
+        showToast("Profile updated successfully!", "success");
+        await loadAndRenderProfile();
+      } catch (error) {
+        console.error('Error updating profile:', error);
+        showToast(error.message || "Failed to update profile", "error");
+      }
+    };
+
+    // ===== Photo Upload =====
+    window.handlePhotoUpload = async function (event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        showToast("Please select a valid image file", "error");
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        showToast("Image must be smaller than 2MB", "error");
+        return;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('profilePicture', file);
+
+        await apiPut(API.employees.uploadPhoto(), formData);
+
+        showToast("Profile photo updated!", "success");
+        await loadAndRenderProfile();
+      } catch (error) {
+        console.error('Error uploading photo:', error);
+        showToast(error.message || "Failed to upload photo", "error");
+      }
+    };
+  </script>
+</body>
+
+</html>

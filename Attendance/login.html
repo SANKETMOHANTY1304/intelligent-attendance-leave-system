@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Suite - Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="login-page">
+
+<div class="main">
+    <div class="left">
+        <div class="logo"></div>
+        <h1>
+            Manage Employee Attendance
+            With <span class="highlight">Smart Intelligence</span>
+        </h1>
+        <p>
+            Track attendance, manage employees, monitor work hours
+            and generate reports - all in one smart platform.
+        </p>
+        <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d" alt="Dashboard preview">
+    </div>
+
+    <div class="right">
+        <div class="container">
+            <div id="loginForm" class="form-box">
+                <h2>Login</h2>
+
+                <label class="role-label">Login As</label>
+                <select id="loginRole" class="role-dropdown" onchange="onRoleChange()">
+                    <option value="employee">Employee</option>
+                    <option value="admin">Admin</option>
+                </select>
+
+                <input type="email" id="loginEmail" placeholder="Email">
+                <input type="password" id="loginPassword" placeholder="Password">
+
+                <button type="button" onclick="login()">Login</button>
+
+                <p id="registerLink">No account?
+                    <span onclick="showRegister()">Register</span>
+                </p>
+            </div>
+
+            <div id="registerForm" class="form-box hidden">
+                <h2>Employee Registration</h2>
+
+                <input type="text" id="regName" placeholder="Full Name *">
+                <input type="email" id="regEmail" placeholder="Email *">
+                <input type="password" id="regPassword" placeholder="Password *">
+
+                <label class="role-label">Department *</label>
+                <select id="department" class="role-dropdown">
+                    <option value="">Select Department</option>
+                    <option value="IT">IT</option>
+                    <option value="HR">HR</option>
+                    <option value="Finance">Finance</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Operations">Operations</option>
+                </select>
+
+                <button onclick="register()">Register</button>
+
+                <p>Already have account?
+                    <span onclick="showLogin()">Login</span>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="api.js"></script>
+<script src="js/login.js"></script>
+
+</body>
+</html>

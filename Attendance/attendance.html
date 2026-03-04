@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Suite - Attendance Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body class="app-page">
+  <div class="app-layout" id="app"></div>
+
+  <!-- Holiday Modal -->
+  <div class="modal-overlay" id="holidayModal">
+    <div class="modal holiday-modal-content">
+      <div class="modal-header">
+        <h3>Full Holiday List 2026</h3>
+        <button class="modal-close" onclick="closeModal('holidayModal')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="table-wrapper">
+          <table id="fullHolidayTable">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Date</th>
+                <th>Location</th>
+                <th>Shifts</th>
+                <th>Classification</th>
+              </tr>
+            </thead>
+            <tbody id="holidayTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    const user = requireAuth();
+    let timerInterval;
+
+    const ALL_HOLIDAYS = [
+      { name: "New Year", date: "01-Jan-2026, Thu", class: "New Year Eve" },
+      { name: "New Year", date: "02-Jan-2026, Fri", class: "Holiday" },
+      { name: "Republic Day", date: "26-Jan-2026, Mon", class: "Holiday" },
+      { name: "Holi", date: "04-Mar-2026, Wed", class: "Holiday" },
+      { name: "Ugadi", date: "19-Mar-2026, Thu", class: "Holiday" },
+      { name: "Eid al-Fitr", date: "21-Mar-2026, Sat", class: "Holiday" },
+      { name: "Good Friday", date: "03-Apr-2026, Fri", class: "Holiday" },
+      { name: "Ambedkar Jayanti", date: "14-Apr-2026, Tue", class: "Holiday" },
+      { name: "Buddha-Purnima/Labour Day", date: "01-May-2026, Fri", class: "Holiday" },
+      { name: "Bakrid", date: "28-May-2026, Thu", class: "Holiday" },
+      { name: "Independence Day", date: "15-Aug-2026, Sat", class: "Holiday" },
+      { name: "Ganesh Chaturthi/Vinayaka Chaturthi", date: "14-Sep-2026, Mon", class: "Holiday" },
+      { name: "Mahatma Gandhi Jayanti", date: "02-Oct-2026, Fri", class: "Holiday" },
+      { name: "Dussehra", date: "20-Oct-2026, Tue", class: "Holiday" },
+      { name: "Karnataka Rajyotsava", date: "01-Nov-2026, Sun", class: "Holiday" },
+      { name: "Diwali/Deepavali", date: "08-Nov-2026, Sun", class: "Holiday" },
+      { name: "Hazarat Ali's Birthday", date: "23-Dec-2026, Wed", class: "Holiday" },
+      { name: "Christmas", date: "25-Dec-2026, Fri", class: "Holiday" }
+    ];
+
+    if (user) {
+      if (user.role === "admin") loadAndRenderAdminAttendance();
+      else loadAndRenderEmployeeAttendance();
+      initSidebar();
+    } else {
+      window.location.href = 'login.html';
+    }
+
+    async function loadAndRenderAdminAttendance() {
+      try {
+        const [employeesData, attData, leavesData] = await Promise.all([
+          apiGet(API.employees.all()),
+          apiGet(API.attendance.daily()),
+          apiGet(API.leaves.all())
+        ]);
+
+        const employees = employeesData || [];
+        const att = attData.attendanceRecords || [];
+        const leaves = leavesData.data || [];
+
+        renderAdminAttendance(employees, att, leaves);
+      } catch (error) {
+        console.error('Error loading admin attendance:', error);
+        document.getElementById("app").innerHTML = `
+          ${renderSidebar("admin", "attendance")}
+          <main class="main-content">
+            ${renderTopbar("Attendance Center", "Admin / Monitor")}
+            <div class="content-area">
+              <div class="card" style="padding:40px;text-align:center">
+                <p style="color:var(--color-danger)">Failed to load attendance data. Please try again.</p>
+                <button class="btn btn-primary" onclick="loadAndRenderAdminAttendance()">Retry</button>
+              </div>
+            </div>
+          </main>
+        `;
+      }
+    }
+
+    function renderAdminAttendance(employees, att, leaves) {
+      const today = new Date().toISOString().split('T')[0];
+      const todayAtt = att.filter(a => a.date === today);
+
+      // Calculate top-level stats
+      const lateArrivals = todayAtt.filter(a => a.status === "Late").length;
+      const approvedLeaves = leaves.filter(l => l.status === "Approved" && l.startDate === today).length;
+      const presentEmps = todayAtt.filter(a => a.status === "Present" || a.status === "Late").map(a => a.employeeName);
+      const onLeaveEmps = leaves.filter(l => l.status === "Approved" && l.startDate <= today && l.endDate >= today).map(l => l.employeeName);
+      const unplannedAbsent = employees.filter(e => !presentEmps.includes(e.name) && !onLeaveEmps.includes(e.name)).length;
+
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("admin", "attendance")}
+        <main class="main-content">
+          ${renderTopbar("Attendance Center", "Admin / Monitor")}
+          <div class="content-area">
+            ${employees.length === 0 ? `
+              <div class="card" style="padding: 60px 20px; text-align: center;">
+                <div class="empty-state">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: var(--color-text-muted); margin-bottom: 16px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <h4>No Attendance Data</h4>
+                  <p>No employees have registered yet. Attendance records will appear here once employees register and mark their attendance.</p>
+                </div>
+              </div>
+            ` : `
+            <!-- Summary Cards -->
+            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 24px;">
+              <div class="stat-card">
+                <div class="stat-icon orange">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div class="stat-info"><h4>Late Arrivals</h4><div class="stat-value">${lateArrivals}</div></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon red">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                </div>
+                <div class="stat-info"><h4>Unplanned Absent</h4><div class="stat-value">${unplannedAbsent}</div></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon green">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="stat-info"><h4>Approved Leave</h4><div class="stat-value">${approvedLeaves}</div></div>
+              </div>
+            </div>
+
+            <!-- Organization Pulse + Monthly Insights -->
+            <div class="admin-attendance-layout">
+              <!-- Left: Organization Pulse -->
+              <div class="card">
+                <div class="card-header">
+                  <h3>Organization Pulse</h3>
+                </div>
+                <div class="card-body">
+                  <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <span style="font-size: 0.875rem; font-weight: 500; color: var(--color-text-secondary);">View:</span>
+                    <select id="adminViewType" class="form-control" style="width: 150px;" onchange="handleViewTypeChange()">
+                      <option value="daily">Single Date</option>
+                      <option value="all">All Dates</option>
+                    </select>
+                    <span id="datePickerLabel" style="font-size: 0.875rem; font-weight: 500; color: var(--color-text-secondary);">Date:</span>
+                    <input type="date" id="adminAttDate" class="form-control" style="width: 200px;" value="${today}">
+                    <button class="btn btn-primary" style="padding: 8px 24px;" onclick="refreshAdminRecords()">Refresh Records</button>
+                  </div>
+                  <div class="table-wrapper">
+                    <table>
+                      <thead><tr>
+                        <th style="color: var(--color-primary);">EMPLOYEE</th>
+                        <th style="color: var(--color-primary);" id="dateColumnHeader">IN TIME</th>
+                        <th style="color: var(--color-primary);">OUT TIME</th>
+                        <th style="color: var(--color-primary);">STATUS</th>
+                      </tr></thead>
+                      <tbody id="orgPulseBody">
+                        ${renderOrgPulseRows(employees, att, today, 'daily')}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: Monthly Insights -->
+              <div class="card">
+                <div class="card-header">
+                  <h3>Monthly Insights</h3>
+                </div>
+                <div class="card-body">
+                  <p style="font-size: 0.875rem; color: var(--color-text-secondary); margin-bottom: 20px;">Select an individual to view their monthly performance trends.</p>
+                  
+                  <div style="margin-bottom: 16px;">
+                    <label style="display:block; font-size: 0.875rem; font-weight: 600; color: var(--color-text); margin-bottom: 6px;">Employee</label>
+                    <select id="insightEmployee" class="form-control">
+                      <option value="">Choose Employee...</option>
+                      ${employees.map(e => `<option value="${e.name}">${e.name}</option>`).join("")}
+                    </select>
+                  </div>
+
+                  <div style="margin-bottom: 16px;">
+                    <label style="display:block; font-size: 0.875rem; font-weight: 600; color: var(--color-text); margin-bottom: 6px;">Select Month</label>
+                    <input type="month" id="insightMonth" class="form-control" value="${new Date().getFullYear()}-${(new Date().getMonth() + 1).toString().padStart(2, '0')}">
+                  </div>
+
+                  <button class="btn btn-primary" style="width: 100%; margin-bottom: 20px;" onclick="analyzeInsights()">Analyze</button>
+
+                  <!-- Insight Cards -->
+                  <div class="insight-card green-card">
+                    <div class="insight-card-title" style="color: var(--color-success);">Days Present</div>
+                    <div class="insight-card-value" id="insightPresent">--</div>
+                  </div>
+                  <div class="insight-card pink-card">
+                    <div class="insight-card-title" style="color: var(--color-danger);">Days Absent</div>
+                    <div class="insight-card-value" id="insightAbsent">--</div>
+                  </div>
+                  <div class="insight-card yellow-card">
+                    <div class="insight-card-title" style="color: var(--color-warning);">Late Arrivals</div>
+                    <div class="insight-card-value" id="insightLate">--</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- All Dates Attendance Table -->
+            <div class="card" style="margin-top: 24px;">
+              <div class="card-header">
+                <h3>All Dates Attendance Records</h3>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                  <select id="allDatesEmployee" class="form-control" style="width: 200px;">
+                    <option value="">All Employees</option>
+                    ${employees.map(e => `<option value="${e.name}">${e.name}</option>`).join("")}
+                  </select>
+                  <button class="btn btn-outline btn-sm" onclick="filterAllDates()">Filter</button>
+                </div>
+              </div>
+              <div class="table-wrapper">
+                <table>
+                  <thead><tr><th>Date</th><th>Employee</th><th>In Time</th><th>Out Time</th><th>Status</th></tr></thead>
+                  <tbody id="allDatesBody">
+                    ${att.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20).map(r => `
+                      <tr>
+                        <td>${formatDate(r.date)}</td>
+                        <td><strong>${r.employeeName}</strong></td>
+                        <td>${r.checkIn}</td>
+                        <td>${r.checkOut}</td>
+                        <td>${getStatusBadge(r.status)}</td>
+                      </tr>
+                    `).join("")}
+                  </tbody>
+                </table>
+                ${att.length === 0 ? '<p style="padding:20px; text-align:center; color:var(--color-text-muted);">No attendance records yet.</p>' : ''}
+              </div>
+            </div>
+            `}
+          </div>
+        </main>`;
+    }
+
+    function renderOrgPulseRows(employees, att, date, viewType = 'daily') {
+      if (viewType === 'all') {
+        // Show all attendance records (not filtered by date)
+        if (att.length === 0) {
+          return `<tr><td colspan="4" style="text-align:center; padding: 20px; color: var(--color-text-muted);">No attendance records found</td></tr>`;
+        }
+        return att.map(record => {
+          return `<tr>
+            <td><strong>${record.employeeName}</strong></td>
+            <td>${record.date}</td>
+            <td>${record.checkIn || '--'} / ${record.checkOut || '--'}</td>
+            <td>${getStatusBadge(record.status)}</td>
+          </tr>`;
+        }).join("");
+      }
+
+      // Daily view - show all employees with their status for selected date
+      return employees.map(emp => {
+        const record = att.find(a => a.employeeName === emp.name && a.date === date);
+        return `<tr>
+          <td><strong>${emp.name}</strong></td>
+          <td>${record ? record.checkIn : '--'}</td>
+          <td>${record ? record.checkOut : '--'}</td>
+          <td>${getStatusBadge(record ? record.status : 'Absent')}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    window.handleViewTypeChange = function () {
+      const viewType = document.getElementById("adminViewType").value;
+      const datePicker = document.getElementById("adminAttDate");
+      const dateLabel = document.getElementById("datePickerLabel");
+      const dateHeader = document.getElementById("dateColumnHeader");
+
+      if (viewType === 'all') {
+        datePicker.style.display = 'none';
+        dateLabel.style.display = 'none';
+        dateHeader.textContent = 'DATE';
+      } else {
+        datePicker.style.display = 'block';
+        dateLabel.style.display = 'block';
+        dateHeader.textContent = 'IN TIME';
+      }
+
+      refreshAdminRecords();
+    };
+
+    window.refreshAdminRecords = async function () {
+      const viewType = document.getElementById("adminViewType").value;
+      const date = document.getElementById("adminAttDate").value;
+      try {
+        let employees, attData;
+
+        if (viewType === 'all') {
+          // Get all attendance records using admin endpoint
+          [employees, attData] = await Promise.all([
+            apiGet(API.employees.all()),
+            apiGet(API.attendance.all())
+          ]);
+          const att = attData.attendance || [];
+          document.getElementById("orgPulseBody").innerHTML = renderOrgPulseRows(employees, att, date, 'all');
+          showToast("Showing all attendance records", "info");
+        } else {
+          // Get daily attendance for selected date
+          [employees, attData] = await Promise.all([
+            apiGet(API.employees.all()),
+            apiGet(API.attendance.daily() + (date ? `?date=${date}` : ''))
+          ]);
+          const att = attData.attendanceRecords || [];
+          document.getElementById("orgPulseBody").innerHTML = renderOrgPulseRows(employees, att, date, 'daily');
+          showToast("Records refreshed for " + formatDate(date), "info");
+        }
+      } catch (error) {
+        console.error('Error refreshing records:', error);
+        showToast("Failed to refresh records", "error");
+      }
+    };
+
+    window.analyzeInsights = async function () {
+      const empName = document.getElementById("insightEmployee").value;
+      const monthVal = document.getElementById("insightMonth").value;
+
+      if (!empName) {
+        showToast("Please select an employee", "error");
+        return;
+      }
+
+      try {
+        // Use admin endpoint to get all attendance records
+        const attResponse = await apiGet(API.attendance.all());
+        const allRecords = attResponse.attendance || [];
+
+        // Filter records for selected employee and month
+        const monthRecords = allRecords.filter(a => a.employeeName === empName && a.date.startsWith(monthVal));
+
+        const present = monthRecords.filter(a => a.status === "Present" || a.status === "Late").length;
+        const late = monthRecords.filter(a => a.status === "Late").length;
+
+        // Calculate working days in the month
+        const [year, month] = monthVal.split("-").map(Number);
+        const daysInMonth = new Date(year, month, 0).getDate();
+        let workingDays = 0;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const day = new Date(year, month - 1, d).getDay();
+          if (day !== 0 && day !== 6) workingDays++;
+        }
+        const absent = workingDays - present;
+
+        // Update insight cards
+        document.getElementById("insightPresent").textContent = present;
+        document.getElementById("insightAbsent").textContent = absent > 0 ? absent : 0;
+        document.getElementById("insightLate").textContent = late;
+
+        // **Also update Organization Pulse table to show only this employee's records for the month**
+        const orgPulseBody = document.getElementById("orgPulseBody");
+        if (orgPulseBody && monthRecords.length > 0) {
+          orgPulseBody.innerHTML = monthRecords
+            .sort((a, b) => b.date.localeCompare(a.date))
+            .map(record => `
+              <tr>
+                <td><strong>${record.employeeName}</strong></td>
+                <td>${record.date}</td>
+                <td>${record.checkIn || '--'} / ${record.checkOut || '--'}</td>
+                <td>${getStatusBadge(record.status)}</td>
+              </tr>
+            `).join("");
+        } else if (orgPulseBody) {
+          orgPulseBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 20px; color: var(--color-text-muted);">No records found for ${empName} in ${monthVal}</td></tr>`;
+        }
+
+        showToast("Insights generated for " + empName, "success");
+      } catch (error) {
+        console.error('Error analyzing insights:', error);
+        showToast("Failed to analyze insights", "error");
+      }
+    };
+
+    window.filterAllDates = async function () {
+      const empName = document.getElementById("allDatesEmployee").value;
+      try {
+        const attResponse = await apiGet(API.attendance.all());
+        const allRecords = attResponse.attendance || [];
+        const filtered = empName ? allRecords.filter(a => a.employeeName === empName) : allRecords;
+
+        document.getElementById("allDatesBody").innerHTML = filtered
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, 50)
+          .map(r => `
+            <tr>
+              <td>${formatDate(r.date)}</td>
+              <td><strong>${r.employeeName}</strong></td>
+              <td>${r.checkIn || '--'}</td>
+              <td>${r.checkOut || '--'}</td>
+              <td>${getStatusBadge(r.status)}</td>
+            </tr>
+          `).join("");
+      } catch (error) {
+        console.error('Error filtering attendance:', error);
+        showToast("Failed to filter records", "error");
+      }
+    };
+
+    async function loadAndRenderEmployeeAttendance() {
+      try {
+        const response = await apiGet(API.attendance.history());
+        const allAttendance = response.attendance || [];
+        renderEmployeeAttendance(allAttendance);
+      } catch (error) {
+        console.error('Error loading employee attendance:', error);
+        document.getElementById("app").innerHTML = `
+          ${renderSidebar("employee", "my-attendance")}
+          <main class="main-content">
+            ${renderTopbar("My Attendance", "Employee / Attendance")}
+            <div class="content-area">
+              <div class="card" style="padding:40px;text-align:center">
+                <p style="color:var(--color-danger)">Failed to load attendance data. Please try again.</p>
+                <button class="btn btn-primary" onclick="loadAndRenderEmployeeAttendance()">Retry</button>
+              </div>
+            </div>
+          </main>
+        `;
+      }
+    }
+
+    function renderEmployeeAttendance(allAttendance) {
+      const empName = user.employeeData?.name || user.name;
+      const today = new Date().toISOString().split('T')[0];
+      const myRecords = allAttendance || [];
+
+      const todayRecord = myRecords.find(a => a.date === today);
+      const activeSession = JSON.parse(localStorage.getItem(`att_session_${user.email}`));
+
+      // Determine button states from DB record (not just localStorage)
+      const hasCheckedIn = !!todayRecord; // true if any record exists for today
+      const hasCheckedOut = todayRecord && todayRecord.checkOut && todayRecord.checkOut !== '--';
+      const isCurrentlyWorking = hasCheckedIn && !hasCheckedOut;
+
+      const checkInDisabled = hasCheckedIn ? 'disabled' : '';
+      const checkOutDisabled = isCurrentlyWorking ? '' : 'disabled';
+
+      document.getElementById("app").innerHTML = `
+        ${renderSidebar("employee", "my-attendance")}
+        <main class="main-content">
+          ${renderTopbar("My Attendance", "Employee / Attendance")}
+          <div class="content-area">
+            
+            <!-- Timer + History side by side -->
+            <div class="split-layout">
+              <div class="card" style="text-align: center; padding: 40px 20px;">
+                <h3 style="text-align: left; margin-bottom: 20px; font-size: 1.1rem; color: #64748b;">Daily Attendance</h3>
+                <div id="stopwatch" class="timer-display">00:00:00</div>
+                <div style="display: flex; gap: 16px; justify-content: center;">
+                  <button id="inBtn" class="btn btn-success" style="padding: 12px 30px;" ${checkInDisabled} onclick="handleCheckIn()">Check In</button>
+                  <button id="outBtn" class="btn btn-danger" style="padding: 12px 30px;" ${checkOutDisabled} onclick="handleCheckOut()">Check Out</button>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-header"><h3>Attendance History</h3></div>
+                <div class="table-wrapper">
+                  <table>
+                    <thead><tr><th>DATE</th><th>IN</th><th>OUT</th><th>STATUS</th></tr></thead>
+                    <tbody>
+                      ${myRecords.length > 0 ? myRecords.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7).map(r => `
+                        <tr>
+                          <td>${formatDate(r.date)}</td>
+                          <td>${r.checkIn}</td>
+                          <td>${r.checkOut}</td>
+                          <td>${getStatusBadge(r.status)}</td>
+                        </tr>
+                      `).join("") : '<tr><td colspan="4" style="text-align:center; padding:40px; color:var(--color-text-muted);">No attendance records yet. Click "Check In" to start tracking.</td></tr>'}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Upcoming Holidays -->
+            <div style="margin-top: 20px;">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                <div class="umbrella-box">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12L12 12"/><path d="M12 21V12"/><path d="M12 12L2 12C2 12 2 4 12 4C22 4 22 12 22 12L12 12Z"/></svg>
+                </div>
+                <h3 style="font-size: 1.25rem; font-weight: 600; color: var(--color-text);">Upcoming Holidays</h3>
+              </div>
+              <div style="display: flex; gap: 16px; overflow-x: auto; padding-bottom: 10px; align-items: center;">
+                ${ALL_HOLIDAYS.slice(3, 6).map(h => `
+                  <div class="holiday-card">
+                    <div style="font-weight: 600; color: #1e293b; font-size: 1rem; margin-bottom: 4px;">${h.name}</div>
+                    <div style="font-size: 0.875rem; color: #64748b;">${h.date}</div>
+                  </div>
+                `).join("")}
+                <div style="margin-left: 8px;">
+                  <a href="javascript:void(0)" onclick="openHolidayModal()" style="color: #2563eb; font-weight: 600; font-size: 0.875rem; white-space: nowrap;">View all</a>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </main>`;
+
+      // Restore timer: if currently working, start timer from check-in time or localStorage
+      if (isCurrentlyWorking) {
+        if (activeSession) {
+          startTimer(activeSession.startTime);
+        } else if (todayRecord && todayRecord.checkIn && todayRecord.checkIn !== '--') {
+          // Parse check-in time from DB to restore timer on page refresh
+          const todayDate = new Date();
+          const timeParts = todayRecord.checkIn.match(/(\d+):(\d+)\s*(AM|PM)/i);
+          if (timeParts) {
+            let hours = parseInt(timeParts[1]);
+            const minutes = parseInt(timeParts[2]);
+            const ampm = timeParts[3].toUpperCase();
+            if (ampm === 'PM' && hours !== 12) hours += 12;
+            if (ampm === 'AM' && hours === 12) hours = 0;
+            todayDate.setHours(hours, minutes, 0, 0);
+            // Save to localStorage so it persists
+            localStorage.setItem(`att_session_${user.email}`, JSON.stringify({
+              startTime: todayDate.getTime(),
+              inTime: todayRecord.checkIn
+            }));
+            startTimer(todayDate.getTime());
+          }
+        }
+      }
+    }
+
+    function startTimer(startTime) {
+      const display = document.getElementById("stopwatch");
+      timerInterval = setInterval(() => {
+        const now = new Date().getTime();
+        const diff = now - startTime;
+        const h = Math.floor(diff / 3600000).toString().padStart(2, '0');
+        const m = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+        const s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+        display.textContent = `${h}:${m}:${s}`;
+      }, 1000);
+    }
+
+    window.handleCheckIn = async function () {
+      try {
+        console.log('Starting check-in...');
+        const now = new Date();
+        const response = await apiPost(API.attendance.checkIn(), {});
+        console.log('Check-in response:', response);
+
+        localStorage.setItem(`att_session_${user.email}`, JSON.stringify({
+          startTime: now.getTime(),
+          inTime: now.toTimeString().slice(0, 5)
+        }));
+
+        console.log('Reloading attendance history...');
+        await loadAndRenderEmployeeAttendance();
+        console.log('Attendance reloaded successfully');
+        showToast("Checked in successfully", "success");
+      } catch (error) {
+        console.error('Check-in error:', error);
+        showToast(error.message || "Failed to check in", "error");
+      }
+    };
+
+    window.handleCheckOut = async function () {
+      try {
+        const response = await apiPut(API.attendance.checkOut(), {});
+        localStorage.removeItem(`att_session_${user.email}`);
+        clearInterval(timerInterval);
+        await loadAndRenderEmployeeAttendance();
+        showToast("Checked out successfully", "success");
+      } catch (error) {
+        console.error('Check-out error:', error);
+        showToast(error.message || "Failed to check out", "error");
+      }
+    };
+
+    window.openHolidayModal = function () {
+      const tbody = document.getElementById('holidayTableBody');
+      tbody.innerHTML = ALL_HOLIDAYS.map(h => `
+        <tr>
+          <td><strong>${h.name}</strong></td>
+          <td>${h.date}</td>
+          <td><span class="badge badge-primary">All Locations</span></td>
+          <td><span class="badge badge-primary">All Shifts</span></td>
+          <td><span class="badge badge-warning">${h.class}</span></td>
+        </tr>
+      `).join("");
+      openModal('holidayModal');
+    }
+  </script>
+</body>
+
+</html>
