@@ -153,7 +153,7 @@ erDiagram
 - **Overlap Prevention**: Cannot apply leave for overlapping dates
 - **Auto Attendance**: Approved leave auto-creates attendance records as "On Leave"
 - **Salary Deductions**: Absent without leave = 1 day deducted; Half-day = 0.5 day; Unpaid leave = 1 day; Approved paid leave = No deduction
-- **Office Hours**: Check-in after 12 PM = "Late" status
+- **Office Hours**: Check-in after 10:30 AM = "Late" status
 
 ---
 
