@@ -178,12 +178,15 @@
                   </div>
                   <div class="table-wrapper">
                     <table>
-                      <thead><tr>
-                        <th style="color: var(--color-primary);">EMPLOYEE</th>
-                        <th style="color: var(--color-primary);" id="dateColumnHeader">IN TIME</th>
-                        <th style="color: var(--color-primary);">OUT TIME</th>
-                        <th style="color: var(--color-primary);">STATUS</th>
-                      </tr></thead>
+                      <thead>
+<tr>
+<th style="color: var(--color-primary);">EMPLOYEE</th>
+<th style="color: var(--color-primary);">DATE</th>
+<th style="color: var(--color-primary);">IN TIME</th>
+<th style="color: var(--color-primary);">OUT TIME</th>
+<th style="color: var(--color-primary);">STATUS</th>
+</tr>
+</thead>
                       <tbody id="orgPulseBody">
                         ${renderOrgPulseRows(employees, att, today, 'daily')}
                       </tbody>
@@ -268,83 +271,45 @@
     }
 
     function renderOrgPulseRows(employees, att, date, viewType = 'daily') {
+
       if (viewType === 'all') {
-        // Show all attendance records (not filtered by date)
+
         if (att.length === 0) {
-          return `<tr><td colspan="4" style="text-align:center; padding: 20px; color: var(--color-text-muted);">No attendance records found</td></tr>`;
+          return `<tr><td colspan="5" style="text-align:center;padding:20px;">No attendance records found</td></tr>`;
         }
-        return att.map(record => {
-          return `<tr>
-            <td><strong>${record.employeeName}</strong></td>
-            <td>${record.date}</td>
-            <td>${record.checkIn || '--'} / ${record.checkOut || '--'}</td>
-            <td>${getStatusBadge(record.status)}</td>
-          </tr>`;
-        }).join("");
+
+        return att.map(record => `
+<tr>
+<td><strong>${record.employeeName}</strong></td>
+<td>${formatDate(record.date)}</td>
+<td>${record.checkIn || '--'}</td>
+<td>${record.checkOut || '--'}</td>
+<td>${getStatusBadge(record.status)}</td>
+</tr>
+`).join("");
+
       }
 
-      // Daily view - show all employees with their status for selected date
       return employees.map(emp => {
-        const record = att.find(a => a.employeeName === emp.name && a.date === date);
-        return `<tr>
-          <td><strong>${emp.name}</strong></td>
-          <td>${record ? record.checkIn : '--'}</td>
-          <td>${record ? record.checkOut : '--'}</td>
-          <td>${getStatusBadge(record ? record.status : 'Absent')}</td>
-        </tr>`;
+
+        const record = att.find(a =>
+          a.employeeName === emp.name &&
+          a.date === date
+        );
+
+        return `
+<tr>
+<td><strong>${emp.name}</strong></td>
+<td>${formatDate(date)}</td>
+<td>${record ? record.checkIn : '--'}</td>
+<td>${record ? record.checkOut : '--'}</td>
+<td>${getStatusBadge(record ? record.status : 'Absent')}</td>
+</tr>
+`;
+
       }).join("");
+
     }
-
-    window.handleViewTypeChange = function () {
-      const viewType = document.getElementById("adminViewType").value;
-      const datePicker = document.getElementById("adminAttDate");
-      const dateLabel = document.getElementById("datePickerLabel");
-      const dateHeader = document.getElementById("dateColumnHeader");
-
-      if (viewType === 'all') {
-        datePicker.style.display = 'none';
-        dateLabel.style.display = 'none';
-        dateHeader.textContent = 'DATE';
-      } else {
-        datePicker.style.display = 'block';
-        dateLabel.style.display = 'block';
-        dateHeader.textContent = 'IN TIME';
-      }
-
-      refreshAdminRecords();
-    };
-
-    window.refreshAdminRecords = async function () {
-      const viewType = document.getElementById("adminViewType").value;
-      const date = document.getElementById("adminAttDate").value;
-      try {
-        let employees, attData;
-
-        if (viewType === 'all') {
-          // Get all attendance records using admin endpoint
-          [employees, attData] = await Promise.all([
-            apiGet(API.employees.all()),
-            apiGet(API.attendance.all())
-          ]);
-          const att = attData.attendance || [];
-          document.getElementById("orgPulseBody").innerHTML = renderOrgPulseRows(employees, att, date, 'all');
-          showToast("Showing all attendance records", "info");
-        } else {
-          // Get daily attendance for selected date
-          [employees, attData] = await Promise.all([
-            apiGet(API.employees.all()),
-            apiGet(API.attendance.daily() + (date ? `?date=${date}` : ''))
-          ]);
-          const att = attData.attendanceRecords || [];
-          document.getElementById("orgPulseBody").innerHTML = renderOrgPulseRows(employees, att, date, 'daily');
-          showToast("Records refreshed for " + formatDate(date), "info");
-        }
-      } catch (error) {
-        console.error('Error refreshing records:', error);
-        showToast("Failed to refresh records", "error");
-      }
-    };
-
     window.analyzeInsights = async function () {
       const empName = document.getElementById("insightEmployee").value;
       const monthVal = document.getElementById("insightMonth").value;
@@ -389,7 +354,8 @@
               <tr>
                 <td><strong>${record.employeeName}</strong></td>
                 <td>${record.date}</td>
-                <td>${record.checkIn || '--'} / ${record.checkOut || '--'}</td>
+                <td>${record.checkIn || '--'}</td>
+                <td>${record.checkOut || '--'}</td>
                 <td>${getStatusBadge(record.status)}</td>
               </tr>
             `).join("");
@@ -457,7 +423,7 @@
       const myRecords = allAttendance || [];
 
       const todayRecord = myRecords.find(a => a.date === today);
-      const activeSession = JSON.parse(localStorage.getItem(`att_session_${user.email}`));
+      const activeSession = JSON.parse(localStorage.getItem(`att_session_${user.email}`) || 'null');
 
       // Determine button states from DB record (not just localStorage)
       const hasCheckedIn = !!todayRecord; // true if any record exists for today
@@ -466,6 +432,11 @@
 
       const checkInDisabled = hasCheckedIn ? 'disabled' : '';
       const checkOutDisabled = isCurrentlyWorking ? '' : 'disabled';
+
+      // Status message for completed attendance
+      const attendanceCompleteMsg = (hasCheckedIn && hasCheckedOut)
+        ? '<p style="margin-top:12px;color:var(--color-success);font-weight:600;font-size:0.9rem;">✅ Today\'s attendance is complete!</p>'
+        : '';
 
       document.getElementById("app").innerHTML = `
         ${renderSidebar("employee", "my-attendance")}
@@ -482,6 +453,7 @@
                   <button id="inBtn" class="btn btn-success" style="padding: 12px 30px;" ${checkInDisabled} onclick="handleCheckIn()">Check In</button>
                   <button id="outBtn" class="btn btn-danger" style="padding: 12px 30px;" ${checkOutDisabled} onclick="handleCheckOut()">Check Out</button>
                 </div>
+                ${attendanceCompleteMsg}
               </div>
 
               <div class="card">
@@ -530,44 +502,71 @@
 
       // Restore timer: if currently working, start timer from check-in time or localStorage
       if (isCurrentlyWorking) {
-        if (activeSession) {
+        if (activeSession && activeSession.startTime) {
           startTimer(activeSession.startTime);
         } else if (todayRecord && todayRecord.checkIn && todayRecord.checkIn !== '--') {
           // Parse check-in time from DB to restore timer on page refresh
-          const todayDate = new Date();
-          const timeParts = todayRecord.checkIn.match(/(\d+):(\d+)\s*(AM|PM)/i);
-          if (timeParts) {
-            let hours = parseInt(timeParts[1]);
-            const minutes = parseInt(timeParts[2]);
-            const ampm = timeParts[3].toUpperCase();
-            if (ampm === 'PM' && hours !== 12) hours += 12;
-            if (ampm === 'AM' && hours === 12) hours = 0;
-            todayDate.setHours(hours, minutes, 0, 0);
-            // Save to localStorage so it persists
+          const startTime = parseCheckInTime(todayRecord.checkIn);
+          if (startTime) {
             localStorage.setItem(`att_session_${user.email}`, JSON.stringify({
-              startTime: todayDate.getTime(),
+              startTime: startTime,
               inTime: todayRecord.checkIn
             }));
-            startTimer(todayDate.getTime());
+            startTimer(startTime);
           }
         }
       }
     }
 
+    // Helper: Parse check-in time string like "10:20 am" or "10:20 AM" to timestamp
+    function parseCheckInTime(timeStr) {
+      if (!timeStr || timeStr === '--') return null;
+      const todayDate = new Date();
+      // Try parsing "HH:MM AM/PM" format
+      const timeParts = timeStr.match(/(\d+):(\d+)\s*(AM|PM|am|pm)/i);
+      if (timeParts) {
+        let hours = parseInt(timeParts[1]);
+        const minutes = parseInt(timeParts[2]);
+        const ampm = timeParts[3].toUpperCase();
+        if (ampm === 'PM' && hours !== 12) hours += 12;
+        if (ampm === 'AM' && hours === 12) hours = 0;
+        todayDate.setHours(hours, minutes, 0, 0);
+        return todayDate.getTime();
+      }
+      // Try parsing "HH:MM" 24-hour format
+      const parts24 = timeStr.match(/(\d+):(\d+)/);
+      if (parts24) {
+        todayDate.setHours(parseInt(parts24[1]), parseInt(parts24[2]), 0, 0);
+        return todayDate.getTime();
+      }
+      return null;
+    }
+
     function startTimer(startTime) {
       const display = document.getElementById("stopwatch");
-      timerInterval = setInterval(() => {
+      if (!display) return;
+      // Update immediately, then every second
+      function updateDisplay() {
         const now = new Date().getTime();
-        const diff = now - startTime;
+        const diff = Math.max(0, now - startTime);
         const h = Math.floor(diff / 3600000).toString().padStart(2, '0');
         const m = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
         const s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
         display.textContent = `${h}:${m}:${s}`;
-      }, 1000);
+      }
+      updateDisplay();
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(updateDisplay, 1000);
     }
 
     window.handleCheckIn = async function () {
+      const inBtn = document.getElementById('inBtn');
+      if (inBtn && inBtn.disabled) {
+        showToast("You have already checked in today", "info");
+        return;
+      }
       try {
+        if (inBtn) inBtn.disabled = true;
         console.log('Starting check-in...');
         const now = new Date();
         const response = await apiPost(API.attendance.checkIn(), {});
@@ -578,26 +577,32 @@
           inTime: now.toTimeString().slice(0, 5)
         }));
 
-        console.log('Reloading attendance history...');
         await loadAndRenderEmployeeAttendance();
-        console.log('Attendance reloaded successfully');
-        showToast("Checked in successfully", "success");
+        showToast("Checked in successfully! Timer started.", "success");
       } catch (error) {
         console.error('Check-in error:', error);
         showToast(error.message || "Failed to check in", "error");
+        if (inBtn) inBtn.disabled = false;
       }
     };
 
     window.handleCheckOut = async function () {
+      const outBtn = document.getElementById('outBtn');
+      if (outBtn && outBtn.disabled) {
+        showToast("You have already checked out today", "info");
+        return;
+      }
       try {
+        if (outBtn) outBtn.disabled = true;
         const response = await apiPut(API.attendance.checkOut(), {});
         localStorage.removeItem(`att_session_${user.email}`);
         clearInterval(timerInterval);
         await loadAndRenderEmployeeAttendance();
-        showToast("Checked out successfully", "success");
+        showToast("Checked out successfully!", "success");
       } catch (error) {
         console.error('Check-out error:', error);
         showToast(error.message || "Failed to check out", "error");
+        if (outBtn) outBtn.disabled = false;
       }
     };
 
