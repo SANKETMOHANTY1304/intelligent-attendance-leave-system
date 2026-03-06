@@ -238,7 +238,7 @@ export const getAllLeaves = async (req, res) => {
           const used = await LeaveRequest.aggregate([
             {
               $match: {
-                employee_id: leave.employee_id._id,
+                employee_id: leave.employee_id ? leave.employee_id._id : null,
                 leave_type: leave.leave_type,
                 status: "Approved",
                 start_date: { $gte: yearStart, $lte: yearEnd },

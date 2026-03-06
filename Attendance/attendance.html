@@ -117,9 +117,9 @@
 
       // Calculate top-level stats
       const lateArrivals = todayAtt.filter(a => a.status === "Late").length;
-      const approvedLeaves = leaves.filter(l => l.status === "Approved" && l.startDate === today).length;
+      const approvedLeaves = leaves.filter(l => l.status === "Approved" && l.start_date && l.start_date.substring(0, 10) === today).length;
       const presentEmps = todayAtt.filter(a => a.status === "Present" || a.status === "Late").map(a => a.employeeName);
-      const onLeaveEmps = leaves.filter(l => l.status === "Approved" && l.startDate <= today && l.endDate >= today).map(l => l.employeeName);
+      const onLeaveEmps = leaves.filter(l => l.status === "Approved" && l.start_date && l.start_date.substring(0, 10) <= today && l.end_date && l.end_date.substring(0, 10) >= today).map(l => l.employee_id ? l.employee_id.name : "");
       const unplannedAbsent = employees.filter(e => !presentEmps.includes(e.name) && !onLeaveEmps.includes(e.name)).length;
 
       document.getElementById("app").innerHTML = `
