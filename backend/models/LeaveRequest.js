@@ -2,9 +2,9 @@ import mongoose from "mongoose";
 
 // ✅ CENTRAL LEAVE RULES
 export const LEAVE_RULES = {
-  Casual: { max_days_per_year: 12 },
-  Sick: { max_days_per_year: 10 },
-  Earned: { max_days_per_year: 15 },
+  Casual: { max_days_per_year: 10 },
+  Sick: { increment_per_month: 2.5 },
+  Earned: { increment_per_month: 2.5 },
   Unpaid: { max_days_per_year: Infinity },
 };
 

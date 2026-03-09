@@ -1,6 +1,7 @@
 import Employee from "../models/Employee.js";
 import Attendance from "../models/Attendance.js";
 import LeaveRequest, { LEAVE_RULES } from "../models/LeaveRequest.js";
+import { calculateTotalAllowance } from "./leaveController.js";
 
 
 // Shows all employees (no filtering)
@@ -81,6 +82,7 @@ export const getEmployeeDashboard = async (req, res) => {
     ]);
 
     // 4. Leave balance
+    const employee = await Employee.findById(id);
     const balance = {};
     for (const [type_, rule] of Object.entries(LEAVE_RULES)) {
       const used = (await LeaveRequest.find({
@@ -90,7 +92,11 @@ export const getEmployeeDashboard = async (req, res) => {
         start_date: { $gte: yearStart },
         end_date: { $lte: yearEnd },
       })).reduce((sum, leave) => sum + (leave.number_of_days || 0), 0);
-      balance[type_.toLowerCase()] = type_ === "Unpaid" ? "unlimited" : Math.max(0, rule.max_days_per_year - used);
+      const allowance = calculateTotalAllowance(employee, type_);
+      balance[type_.toLowerCase()] = {
+        remaining: type_ === "Unpaid" ? "unlimited" : Math.max(0, allowance - used),
+        total: type_ === "Unpaid" ? "unlimited" : allowance
+      };
     }
 
     // 5. Recent 5 leave requests (with rejection reason)

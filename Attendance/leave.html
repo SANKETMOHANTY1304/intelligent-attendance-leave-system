@@ -162,9 +162,9 @@
     function renderEmployeeLeave(leaves, balanceResponse) {
       // Backend getLeaveBalance returns: { success, employee_id, year, balance: { sick, casual, earned, unpaid } }
       const bal = balanceResponse.balance || {};
-      const sickRemaining = bal.sick != null ? bal.sick : 10;
-      const casualRemaining = bal.casual != null ? bal.casual : 12;
-      const earnedRemaining = bal.earned != null ? bal.earned : 15;
+      const sick = bal.sick || { remaining: 0, total: 0 };
+      const casual = bal.casual || { remaining: 0, total: 0 };
+      const earned = bal.earned || { remaining: 0, total: 0 };
 
       document.getElementById("app").innerHTML = `
         ${renderSidebar("employee", "apply-leave")}
@@ -179,7 +179,7 @@
                 </div>
                 <div class="stat-info">
                   <h4>Sick Leave</h4>
-                  <div class="stat-value">${sickRemaining} / 10</div>
+                  <div class="stat-value">${sick.remaining} / ${sick.total}</div>
                 </div>
               </div>
               <div class="stat-card">
@@ -188,7 +188,7 @@
                 </div>
                 <div class="stat-info">
                   <h4>Casual Leave</h4>
-                  <div class="stat-value">${casualRemaining} / 12</div>
+                  <div class="stat-value">${casual.remaining} / ${casual.total}</div>
                 </div>
               </div>
               <div class="stat-card">
@@ -197,7 +197,7 @@
                 </div>
                 <div class="stat-info">
                   <h4>Earned Leave</h4>
-                  <div class="stat-value">${earnedRemaining} / 15</div>
+                  <div class="stat-value">${earned.remaining} / ${earned.total}</div>
                 </div>
               </div>
             </div>

@@ -219,9 +219,9 @@
 
       // Backend getLeaveBalance returns: { success, employee_id, year, balance: { sick, casual, earned, unpaid } }
       const bal = balance.balance || {};
-      const totalRemaining = (typeof bal.sick === 'number' ? bal.sick : 0)
-        + (typeof bal.casual === 'number' ? bal.casual : 0)
-        + (typeof bal.earned === 'number' ? bal.earned : 0);
+      const totalRemaining = (bal.sick ? bal.sick.remaining : 0)
+        + (bal.casual ? bal.casual.remaining : 0)
+        + (bal.earned ? bal.earned.remaining : 0);
 
       document.getElementById("app").innerHTML = `
         ${renderSidebar("employee", "dashboard")}

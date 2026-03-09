@@ -2,6 +2,7 @@ import Employee from "../models/Employee.js";
 import Attendance from "../models/Attendance.js";
 import LeaveRequest, { LEAVE_RULES } from "../models/LeaveRequest.js";
 import { calculateMonthlySalary } from "./salaryController.js";
+import { calculateTotalAllowance } from "./leaveController.js";
 
 /**
  * Generate Leave Utilization Report
@@ -12,7 +13,7 @@ export const getLeaveUtilizationReport = async (req, res) => {
     const { year } = req.query;
 
     if (!year) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Year is required",
         usage: "/api/reports/leave-utilization?year=2026"
       });
@@ -57,10 +58,11 @@ export const getLeaveUtilizationReport = async (req, res) => {
         });
 
         // Calculate total allocated leaves (excluding Unpaid which is unlimited)
-        const totalAllocated = 
-          LEAVE_RULES.Casual.max_days_per_year +
-          LEAVE_RULES.Sick.max_days_per_year +
-          LEAVE_RULES.Earned.max_days_per_year;
+        const casualAlloc = calculateTotalAllowance(employee, "Casual", endOfYear);
+        const sickAlloc = calculateTotalAllowance(employee, "Sick", endOfYear);
+        const earnedAlloc = calculateTotalAllowance(employee, "Earned", endOfYear);
+
+        const totalAllocated = casualAlloc + sickAlloc + earnedAlloc;
 
         const totalUsed = usedLeaves.Casual + usedLeaves.Sick + usedLeaves.Earned;
         const remaining = totalAllocated - totalUsed;
@@ -73,20 +75,20 @@ export const getLeaveUtilizationReport = async (req, res) => {
           used: totalUsed,
           remaining: remaining,
           breakdown: {
-            casual: { 
-              allocated: LEAVE_RULES.Casual.max_days_per_year, 
-              used: usedLeaves.Casual, 
-              remaining: LEAVE_RULES.Casual.max_days_per_year - usedLeaves.Casual 
+            casual: {
+              allocated: casualAlloc,
+              used: usedLeaves.Casual,
+              remaining: casualAlloc - usedLeaves.Casual
             },
-            sick: { 
-              allocated: LEAVE_RULES.Sick.max_days_per_year, 
-              used: usedLeaves.Sick, 
-              remaining: LEAVE_RULES.Sick.max_days_per_year - usedLeaves.Sick 
+            sick: {
+              allocated: sickAlloc,
+              used: usedLeaves.Sick,
+              remaining: sickAlloc - usedLeaves.Sick
             },
-            earned: { 
-              allocated: LEAVE_RULES.Earned.max_days_per_year, 
-              used: usedLeaves.Earned, 
-              remaining: LEAVE_RULES.Earned.max_days_per_year - usedLeaves.Earned 
+            earned: {
+              allocated: earnedAlloc,
+              used: usedLeaves.Earned,
+              remaining: earnedAlloc - usedLeaves.Earned
             },
             unpaid: { used: usedLeaves.Unpaid }
           }
@@ -114,7 +116,7 @@ export const getAttendanceSummaryReport = async (req, res) => {
     const { month, year } = req.query;
 
     if (!month || !year) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Month and year are required",
         usage: "/api/reports/attendance-summary?month=1&year=2026"
       });
@@ -161,7 +163,7 @@ export const getAttendanceSummaryReport = async (req, res) => {
       const effectiveStart = joiningDate > startOfMonth ? joiningDate : startOfMonth;
       let empWorkingDays = 0;
       const currentDate = new Date(effectiveStart);
-      
+
       while (currentDate <= endOfMonth) {
         if (currentDate.getDay() !== 0) empWorkingDays++;
         currentDate.setDate(currentDate.getDate() + 1);
@@ -185,8 +187,8 @@ export const getAttendanceSummaryReport = async (req, res) => {
         present: presentCount,
         late: lateCount,
         absent: absentCount,
-        attendance_rate: empWorkingDays > 0 
-          ? Math.round((empAttendance.length / empWorkingDays) * 100 * 100) / 100 
+        attendance_rate: empWorkingDays > 0
+          ? Math.round((empAttendance.length / empWorkingDays) * 100 * 100) / 100
           : 0
       });
     });
@@ -216,7 +218,7 @@ export const getDepartmentAveragesReport = async (req, res) => {
     const { month, year } = req.query;
 
     if (!month || !year) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Month and year are required",
         usage: "/api/reports/department-averages?month=1&year=2026"
       });
@@ -282,7 +284,7 @@ export const getDepartmentAveragesReport = async (req, res) => {
       const effectiveStart = joiningDate > startOfMonth ? joiningDate : startOfMonth;
       let empWorkingDays = 0;
       const currentDate = new Date(effectiveStart);
-      
+
       while (currentDate <= endOfMonth) {
         if (currentDate.getDay() !== 0) empWorkingDays++;
         currentDate.setDate(currentDate.getDate() + 1);
@@ -300,7 +302,7 @@ export const getDepartmentAveragesReport = async (req, res) => {
           (new Date(leave.end_date) - new Date(leave.start_date)) / (1000 * 60 * 60 * 24)
         ) + 1;
         const leaveDays = leave.half_day_type ? 0.5 : daysDiff;
-        
+
         if (departments[dept]) {
           departments[dept].total_leaves += leaveDays;
         }
@@ -338,7 +340,7 @@ export const getSalaryReport = async (req, res) => {
     const { month, year } = req.query;
 
     if (!month || !year) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Month and year are required",
         usage: "/api/reports/salary?month=1&year=2026"
       });

@@ -1,6 +1,46 @@
 import LeaveRequest, { LEAVE_RULES } from "../models/LeaveRequest.js";
 import Attendance from "../models/Attendance.js";
+import Employee from "../models/Employee.js";
 import mongoose from "mongoose";
+
+/**
+ * Calculates the total allowance for a specific leave type for an employee up to a specific date.
+ * 
+ * @param {Object} employee - Employee object with joining_date
+ * @param {string} leaveType - Type of leave (Casual, Sick, Earned, Unpaid)
+ * @param {Date} [targetDate] - The date to calculate up to (defaults to now)
+ * @returns {number} The total days allowed
+ */
+export const calculateTotalAllowance = (employee, leaveType, targetDate = new Date()) => {
+  const rule = LEAVE_RULES[leaveType];
+  if (!rule) return 0;
+
+  if (rule.max_days_per_year !== undefined) {
+    return rule.max_days_per_year;
+  }
+
+  if (rule.increment_per_month) {
+    const year = targetDate.getFullYear();
+    const joiningDate = new Date(employee.joining_date);
+
+    // If employee joined after the target year, they have no leave
+    if (joiningDate.getFullYear() > year) return 0;
+
+    let startMonth = 1; // Default to January
+    if (joiningDate.getFullYear() === year) {
+      startMonth = joiningDate.getMonth() + 1;
+    }
+
+    const endMonth = targetDate.getMonth() + 1;
+
+    // Months eligible for leave this year
+    const activeMonths = Math.max(0, endMonth - startMonth + 1);
+
+    return activeMonths * rule.increment_per_month;
+  }
+
+  return 0;
+};
 
 // helper
 const calculateDays = (start, end, halfDayType) => {
@@ -49,6 +89,11 @@ export const applyLeave = async (req, res) => {
 
     // ✅ yearly usage check (except unpaid)
     if (leave_type !== "Unpaid") {
+      const employee = await Employee.findById(employee_id);
+      if (!employee) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
       const yearStart = new Date(
         new Date(start_date).getFullYear(),
         0,
@@ -78,10 +123,11 @@ export const applyLeave = async (req, res) => {
       ]);
 
       const usedDays = used[0]?.total || 0;
+      const allowance = calculateTotalAllowance(employee, leave_type, new Date(start_date));
 
-      if (usedDays + requestedDays > rule.max_days_per_year) {
+      if (usedDays + requestedDays > allowance) {
         return res.status(400).json({
-          message: `Exceeds yearly limit for ${leave_type}`,
+          message: `Exceeds current allowance for ${leave_type}. Allowed: ${allowance}, Used: ${usedDays}, Requested: ${requestedDays}`,
         });
       }
     }
@@ -113,6 +159,7 @@ export const approveLeave = async (req, res) => {
     // ✅ Check leave balance before approving
     const rule = LEAVE_RULES[leave.leave_type];
     if (leave.leave_type !== "Unpaid" && rule) {
+      const employee = await Employee.findById(leave.employee_id);
       const year = new Date(leave.start_date).getFullYear();
       const yearStart = new Date(year, 0, 1);
       const yearEnd = new Date(year, 11, 31);
@@ -135,9 +182,10 @@ export const approveLeave = async (req, res) => {
       ]);
 
       const usedDays = used[0]?.total || 0;
-      if (usedDays + leave.number_of_days > rule.max_days_per_year) {
+      const allowance = calculateTotalAllowance(employee, leave.leave_type, new Date(leave.start_date));
+      if (usedDays + leave.number_of_days > allowance) {
         return res.status(400).json({
-          message: `Cannot approve: exceeds yearly limit for ${leave.leave_type}. Used: ${usedDays}, Limit: ${rule.max_days_per_year}`
+          message: `Cannot approve: exceeds allowance for ${leave.leave_type}. Used: ${usedDays}, Limit: ${allowance}`
         });
       }
     }
@@ -253,7 +301,8 @@ export const getAllLeaves = async (req, res) => {
           ]);
 
           const usedDays = used[0]?.total || 0;
-          leaveObj.remaining_balance = Math.max(0, rule.max_days_per_year - usedDays);
+          const allowance = calculateTotalAllowance(leave.employee_id, leave.leave_type, new Date(leave.start_date));
+          leaveObj.remaining_balance = Math.max(0, allowance - usedDays);
         }
 
         return leaveObj;
@@ -294,6 +343,7 @@ export const getLeaveBalance = async (req, res) => {
     const year = new Date().getFullYear();
     const balance = {};
 
+    const employee = await Employee.findById(employee_id);
     for (const [type, rule] of Object.entries(LEAVE_RULES)) {
       const used = (await LeaveRequest.find({
         employee_id: employee_id,
@@ -303,7 +353,11 @@ export const getLeaveBalance = async (req, res) => {
         end_date: { $lte: new Date(year, 11, 31) },
       })).reduce((sum, leave) => sum + (leave.number_of_days || 0), 0);
 
-      balance[type.toLowerCase()] = type === "Unpaid" ? "unlimited" : Math.max(0, rule.max_days_per_year - used);
+      const allowance = calculateTotalAllowance(employee, type);
+      balance[type.toLowerCase()] = {
+        remaining: type === "Unpaid" ? "unlimited" : Math.max(0, allowance - used),
+        total: type === "Unpaid" ? "unlimited" : allowance
+      };
     }
 
     res.json({ success: true, employee_id: employee_id, year, balance });
