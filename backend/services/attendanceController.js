@@ -1,25 +1,10 @@
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 
-// Helper: Get YYYY-MM-DD in IST
-const getISTDateString = (dateInput = new Date()) => {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  });
-  const parts = formatter.formatToParts(new Date(dateInput));
-  const year = parts.find(p => p.type === 'year').value;
-  const month = parts.find(p => p.type === 'month').value;
-  const day = parts.find(p => p.type === 'day').value;
-  return `${year}-${month}-${day}`;
-};
-
-// Helper: Check if date is weekend (In IST)
+// Helper: Check if date is weekend
 const isWeekend = (date) => {
-  const weekday = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Kolkata', weekday: 'short'
-  }).format(new Date(date));
-  return weekday === 'Sat' || weekday === 'Sun';
+  const day = new Date(date).getDay();
+  return day === 0 || day === 6;
 };
 
 // Helper: Calculate work hours
@@ -28,11 +13,12 @@ const calculateWorkHours = (checkIn, checkOut) => {
   return ((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60));
 };
 
-// Helper: Get start and end of day in UTC bounds for IST timezone
+// Helper: Get start and end of day
 const getDateRange = (date) => {
-  const dateStr = getISTDateString(date);
-  const start = new Date(`${dateStr}T00:00:00.000+05:30`);
-  const end = new Date(`${dateStr}T23:59:59.999+05:30`);
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
   return { start, end };
 };
 
@@ -43,15 +29,11 @@ function calculateStatus(checkIn, checkOut) {
   return "Present";
 }
 
-// Helper to format time for display (Explicitly in IST for Vercel deployment)
+// Helper to format time for display
 export const formatTime = (date) => {
   if (!date) return null;
   const d = new Date(date);
-  return d.toLocaleTimeString('en-US', {
-    timeZone: 'Asia/Kolkata',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
 const OFFICE_START_TIME = 10; // 10 AM
@@ -60,6 +42,7 @@ const OFFICE_START_TIME = 10; // 10 AM
 export const checkIn = async (req, res) => {
   try {
     const employee_id = req.employee.id; // From JWT token via authEmployee middleware
+    const { location } = req.body;
     const now = new Date();
 
     // Check if today is a weekend
@@ -84,17 +67,12 @@ export const checkIn = async (req, res) => {
       });
     }
 
-    // Check if it's past OFFICE_START_TIME in IST
-    const currentISTHour = parseInt(new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Kolkata', hour: 'numeric', hourCycle: 'h23'
-    }).format(now));
-
-    const currentISTMinute = parseInt(new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Kolkata', minute: 'numeric'
-    }).format(now));
+    // Get today's date at office start time
+    const officeStart = new Date(now);
+    officeStart.setHours(OFFICE_START_TIME, 0, 0, 0);
 
     let status = "Logged In";
-    if (currentISTHour > OFFICE_START_TIME || (currentISTHour === OFFICE_START_TIME && currentISTMinute > 30)) {
+    if (now > officeStart) {
       status = "Late";
     }
 
@@ -103,7 +81,8 @@ export const checkIn = async (req, res) => {
       check_in: now,
       check_out: null,
       status,
-      date: now
+      date: now,
+      location: location || {}
     });
 
     await attendance.save();
@@ -212,7 +191,8 @@ export const getDailyAttendance = async (req, res) => {
       workHours: record.work_hours || 0,
       employeeName: record.employee_id?.name || 'Unknown',
       employeeEmail: record.employee_id?.email || '',
-      department: record.employee_id?.department || ''
+      department: record.employee_id?.department || '',
+      location: record.location || {}
     }));
 
     res.json({
@@ -278,7 +258,8 @@ export const getAllAttendance = async (req, res) => {
       status: record.status,
       workHours: record.work_hours || 0,
       employeeName: record.employee_id?.name || 'Unknown',
-      department: record.employee_id?.department || ''
+      department: record.employee_id?.department || '',
+      location: record.location || {}
     }));
 
     res.json({

@@ -185,6 +185,7 @@
 <th style="color: var(--color-primary);">IN TIME</th>
 <th style="color: var(--color-primary);">OUT TIME</th>
 <th style="color: var(--color-primary);">STATUS</th>
+<th style="color: var(--color-primary);">LOCATION</th>
 </tr>
 </thead>
                       <tbody id="orgPulseBody">
@@ -249,7 +250,7 @@
               </div>
               <div class="table-wrapper">
                 <table>
-                  <thead><tr><th>Date</th><th>Employee</th><th>In Time</th><th>Out Time</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Date</th><th>Employee</th><th>In Time</th><th>Out Time</th><th>Status</th><th>Location</th></tr></thead>
                   <tbody id="allDatesBody">
                     ${att.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20).map(r => `
                       <tr>
@@ -258,6 +259,7 @@
                         <td>${r.checkIn}</td>
                         <td>${r.checkOut}</td>
                         <td>${getStatusBadge(r.status)}</td>
+                        <td>${r.location && r.location.latitude ? `<a href="https://maps.google.com/?q=${r.location.latitude},${r.location.longitude}" target="_blank" style="color: #2563eb; text-decoration: underline; font-size: 0.85rem;">View Map</a>` : '--'}</td>
                       </tr>
                     `).join("")}
                   </tbody>
@@ -285,6 +287,7 @@
 <td>${record.checkIn || '--'}</td>
 <td>${record.checkOut || '--'}</td>
 <td>${getStatusBadge(record.status)}</td>
+<td>${record.location && record.location.latitude ? `<a href="https://maps.google.com/?q=${record.location.latitude},${record.location.longitude}" target="_blank" style="color: #2563eb; text-decoration: underline; font-size: 0.85rem;">View Map</a>` : '--'}</td>
 </tr>
 `).join("");
 
@@ -304,6 +307,7 @@
 <td>${record ? record.checkIn : '--'}</td>
 <td>${record ? record.checkOut : '--'}</td>
 <td>${getStatusBadge(record ? record.status : 'Absent')}</td>
+<td>${record && record.location && record.location.latitude ? `<a href="https://maps.google.com/?q=${record.location.latitude},${record.location.longitude}" target="_blank" style="color: #2563eb; text-decoration: underline; font-size: 0.85rem;">View Map</a>` : '--'}</td>
 </tr>
 `;
 
@@ -357,6 +361,7 @@
                 <td>${record.checkIn || '--'}</td>
                 <td>${record.checkOut || '--'}</td>
                 <td>${getStatusBadge(record.status)}</td>
+                <td>${record.location && record.location.latitude ? `<a href="https://maps.google.com/?q=${record.location.latitude},${record.location.longitude}" target="_blank" style="color: #2563eb; text-decoration: underline; font-size: 0.85rem;">View Map</a>` : '--'}</td>
               </tr>
             `).join("");
         } else if (orgPulseBody) {
@@ -387,6 +392,7 @@
               <td>${r.checkIn || '--'}</td>
               <td>${r.checkOut || '--'}</td>
               <td>${getStatusBadge(r.status)}</td>
+              <td>${r.location && r.location.latitude ? `<a href="https://maps.google.com/?q=${r.location.latitude},${r.location.longitude}" target="_blank" style="color: #2563eb; text-decoration: underline; font-size: 0.85rem;">View Map</a>` : '--'}</td>
             </tr>
           `).join("");
       } catch (error) {
@@ -568,8 +574,36 @@
       try {
         if (inBtn) inBtn.disabled = true;
         console.log('Starting check-in...');
+
+        // Get Location (Mandatory)
+        let location = null;
+        if (!navigator.geolocation) {
+          showToast("Geolocation is not supported by your browser.", "error");
+          if (inBtn) inBtn.disabled = false;
+          return;
+        }
+
+        try {
+          const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+          });
+          location = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+        } catch (geoError) {
+          console.warn('Geolocation error:', geoError);
+          let errorMsg = "Failed to get location. Please enable location services to check in.";
+          if (geoError.code === 1) { // PERMISSION_DENIED
+            errorMsg = "Location access denied. Please allow location tracking in your browser to check in.";
+          }
+          showToast(errorMsg, "error");
+          if (inBtn) inBtn.disabled = false;
+          return; // Abort check-in!
+        }
+
         const now = new Date();
-        const response = await apiPost(API.attendance.checkIn(), {});
+        const response = await apiPost(API.attendance.checkIn(), { location });
         console.log('Check-in response:', response);
 
         localStorage.setItem(`att_session_${user.email}`, JSON.stringify({

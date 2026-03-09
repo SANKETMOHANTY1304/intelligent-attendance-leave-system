@@ -23,6 +23,11 @@ const attendanceSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    location: {
+      latitude: Number,
+      longitude: Number,
+      address: String
+    },
   },
   { timestamps: true }
 );
