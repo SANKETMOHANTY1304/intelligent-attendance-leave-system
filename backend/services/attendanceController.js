@@ -1,10 +1,25 @@
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 
-// Helper: Check if date is weekend
+// Helper: Get YYYY-MM-DD in IST
+const getISTDateString = (dateInput = new Date()) => {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  });
+  const parts = formatter.formatToParts(new Date(dateInput));
+  const year = parts.find(p => p.type === 'year').value;
+  const month = parts.find(p => p.type === 'month').value;
+  const day = parts.find(p => p.type === 'day').value;
+  return `${year}-${month}-${day}`;
+};
+
+// Helper: Check if date is weekend (In IST)
 const isWeekend = (date) => {
-  const day = new Date(date).getDay();
-  return day === 0 || day === 6;
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata', weekday: 'short'
+  }).format(new Date(date));
+  return weekday === 'Sat' || weekday === 'Sun';
 };
 
 // Helper: Calculate work hours
@@ -13,12 +28,11 @@ const calculateWorkHours = (checkIn, checkOut) => {
   return ((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60));
 };
 
-// Helper: Get start and end of day
+// Helper: Get start and end of day in UTC bounds for IST timezone
 const getDateRange = (date) => {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(date);
-  end.setHours(23, 59, 59, 999);
+  const dateStr = getISTDateString(date);
+  const start = new Date(`${dateStr}T00:00:00.000+05:30`);
+  const end = new Date(`${dateStr}T23:59:59.999+05:30`);
   return { start, end };
 };
 
@@ -29,11 +43,15 @@ function calculateStatus(checkIn, checkOut) {
   return "Present";
 }
 
-// Helper to format time for display
+// Helper to format time for display (Explicitly in IST for Vercel deployment)
 export const formatTime = (date) => {
   if (!date) return null;
   const d = new Date(date);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString('en-US', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 };
 
 const OFFICE_START_TIME = 10; // 10 AM
@@ -66,12 +84,17 @@ export const checkIn = async (req, res) => {
       });
     }
 
-    // Get today's date at office start time
-    const officeStart = new Date(now);
-    officeStart.setHours(OFFICE_START_TIME, 0, 0, 0);
+    // Check if it's past OFFICE_START_TIME in IST
+    const currentISTHour = parseInt(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata', hour: 'numeric', hourCycle: 'h23'
+    }).format(now));
+
+    const currentISTMinute = parseInt(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata', minute: 'numeric'
+    }).format(now));
 
     let status = "Logged In";
-    if (now > officeStart) {
+    if (currentISTHour > OFFICE_START_TIME || (currentISTHour === OFFICE_START_TIME && currentISTMinute > 30)) {
       status = "Late";
     }
 
