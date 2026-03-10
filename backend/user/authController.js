@@ -19,10 +19,10 @@ export const unifiedLogin = async (req, res) => {
 
     if (role === "admin") {
       // Admin login
-      const adminEmail = process.env.ADMIN_EMAIL;
-      const adminPassword = process.env.ADMIN_PASSWORD;
+      const adminEmail = process.env.ADMIN_EMAIL?.trim();
+      const adminPassword = process.env.ADMIN_PASSWORD?.trim();
 
-      if (email !== adminEmail || password !== adminPassword) {
+      if (email?.trim() !== adminEmail || password?.trim() !== adminPassword) {
         return res.status(401).json({ success: false, message: "Invalid admin credentials" });
       }
 
