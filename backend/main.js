@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 process.env.DOTENV_QUIET = "true";
 dotenv.config({ path: path.join(__dirname, ".env"), quiet: true });
 
-const PORT = 8080;
+const PORT = process.env.PORT || 8080;
 import employeeRouter from "./routes/Employees.js";
 import attendanceRouter from "./routes/attendanceRoutes.js";
 import reportsRouter from "./routes/reportRoutes.js";
@@ -42,8 +42,8 @@ connectDB();
 const startServer = () => {
   try {
     app.listen(PORT, () => {
-      console.log("🚀 Server running on http://localhost:" + PORT);
-      console.log("📱 Frontend: http://localhost:" + PORT + "/login.html");
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📱 Frontend: http://localhost:${PORT}/login.html`);
     })
   } catch (err) {
     console.error("Failed to start server:", err.message);
@@ -51,9 +51,8 @@ const startServer = () => {
   }
 }
 
-if (process.env.NODE_ENV !== "production") {
-  startServer();
-}
+// Start the server in all environments for Digital Ocean
+startServer();
 
 // test route
 app.get("/", (req, res) => {

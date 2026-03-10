@@ -20,11 +20,15 @@ export const calculateTotalAllowance = (employee, leaveType, targetDate = new Da
   }
 
   if (rule.increment_per_month) {
+    if (!employee || !employee.joining_date) return 0;
+
     const year = targetDate.getFullYear();
     const joiningDate = new Date(employee.joining_date);
 
-    // If employee joined after the target year, they have no leave
-    if (joiningDate.getFullYear() > year) return 0;
+    // If joining date is invalid or in the future
+    if (isNaN(joiningDate.getTime()) || joiningDate.getFullYear() > year) {
+      return 0;
+    }
 
     let startMonth = 1; // Default to January
     if (joiningDate.getFullYear() === year) {
@@ -167,7 +171,7 @@ export const approveLeave = async (req, res) => {
       const used = await LeaveRequest.aggregate([
         {
           $match: {
-            employee_id: leave.employee_id,
+            employee_id: new mongoose.Types.ObjectId(leave.employee_id),
             leave_type: leave.leave_type,
             status: "Approved",
             start_date: { $gte: yearStart, $lte: yearEnd },
@@ -267,7 +271,7 @@ export const rejectLeave = async (req, res) => {
 export const getAllLeaves = async (req, res) => {
   try {
     const leaves = await LeaveRequest.find()
-      .populate("employee_id", "name email department")
+      .populate("employee_id", "name email department joining_date")
       .sort({ createdAt: -1 });
 
     // Calculate remaining balance for each leave
@@ -279,30 +283,41 @@ export const getAllLeaves = async (req, res) => {
         if (leave.leave_type === "Unpaid" || !rule) {
           leaveObj.remaining_balance = "Unlimited";
         } else {
-          const year = new Date(leave.start_date).getFullYear();
-          const yearStart = new Date(year, 0, 1);
-          const yearEnd = new Date(year, 11, 31);
+          try {
+            const year = new Date(leave.start_date).getFullYear();
+            const yearStart = new Date(year, 0, 1);
+            const yearEnd = new Date(year, 11, 31);
 
-          const used = await LeaveRequest.aggregate([
-            {
-              $match: {
-                employee_id: leave.employee_id ? leave.employee_id._id : null,
-                leave_type: leave.leave_type,
-                status: "Approved",
-                start_date: { $gte: yearStart, $lte: yearEnd },
-              },
-            },
-            {
-              $group: {
-                _id: null,
-                total: { $sum: "$number_of_days" },
-              },
-            },
-          ]);
+            const empId = leave.employee_id ? (leave.employee_id._id || leave.employee_id) : null;
 
-          const usedDays = used[0]?.total || 0;
-          const allowance = calculateTotalAllowance(leave.employee_id, leave.leave_type, new Date(leave.start_date));
-          leaveObj.remaining_balance = Math.max(0, allowance - usedDays);
+            if (!empId) {
+              leaveObj.remaining_balance = 0;
+            } else {
+              const used = await LeaveRequest.aggregate([
+                {
+                  $match: {
+                    employee_id: new mongoose.Types.ObjectId(empId),
+                    leave_type: leave.leave_type,
+                    status: "Approved",
+                    start_date: { $gte: yearStart, $lte: yearEnd },
+                  },
+                },
+                {
+                  $group: {
+                    _id: null,
+                    total: { $sum: "$number_of_days" },
+                  },
+                },
+              ]);
+
+              const usedDays = used[0]?.total || 0;
+              const allowance = calculateTotalAllowance(leave.employee_id, leave.leave_type, new Date(leave.start_date));
+              leaveObj.remaining_balance = Math.max(0, allowance - usedDays);
+            }
+          } catch (err) {
+            console.error("Balance calculation error:", err);
+            leaveObj.remaining_balance = "--";
+          }
         }
 
         return leaveObj;
@@ -323,7 +338,7 @@ export const getAllLeaves = async (req, res) => {
 export const getPendingLeaves = async (req, res) => {
   try {
     const leaves = await LeaveRequest.find({ status: "Pending" })
-      .populate("employee_id", "name email department")
+      .populate("employee_id", "name email department joining_date")
       .sort({ createdAt: -1 });
 
     res.json({
