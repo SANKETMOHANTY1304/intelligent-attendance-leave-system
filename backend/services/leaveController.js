@@ -11,7 +11,7 @@ import mongoose from "mongoose";
  * @param {Date} [targetDate] - The date to calculate up to (defaults to now)
  * @returns {number} The total days allowed
  */
-export const calculateTotalAllowance = (employee, leaveType, targetDate = new Date()) => {
+export const calculateTotalAllowance = (employee, leaveType, targetDate = new Date(), assumeFullYear = false) => {
   const rule = LEAVE_RULES[leaveType];
   if (!rule) return 0;
 
@@ -20,9 +20,32 @@ export const calculateTotalAllowance = (employee, leaveType, targetDate = new Da
   }
 
   if (rule.increment_per_month) {
-    // We always assume a full 12 months of allocation (12 * 2.5 = 30 days per year for Sick/Earned)
-    // rather than pro-rating them based on joining date.
-    return 12 * rule.increment_per_month;
+     if (assumeFullYear) {
+       // For Yearly Reports: Always assume a full 12 months (return 30)
+       return 12 * rule.increment_per_month;
+     }
+
+     if (!employee || !employee.joining_date) return 0;
+
+     const year = targetDate.getFullYear();
+     const joiningDate = new Date(employee.joining_date);
+
+     // If joining date is invalid or in the future
+     if (isNaN(joiningDate.getTime()) || joiningDate.getFullYear() > year) {
+       return 0;
+     }
+
+     let startMonth = 1; // Default to January
+     if (joiningDate.getFullYear() === year) {
+       startMonth = joiningDate.getMonth() + 1;
+     }
+
+     const endMonth = targetDate.getMonth() + 1;
+
+     // Months eligible for leave THIS year, up to the targetDate
+     const activeMonths = Math.max(0, endMonth - startMonth + 1);
+
+     return activeMonths * rule.increment_per_month;
   }
 
   return 0;

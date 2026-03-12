@@ -58,9 +58,10 @@ export const getLeaveUtilizationReport = async (req, res) => {
         });
 
         // Calculate total allocated leaves (excluding Unpaid which is unlimited)
-        const casualAlloc = calculateTotalAllowance(employee, "Casual", endOfYear);
-        const sickAlloc = calculateTotalAllowance(employee, "Sick", endOfYear);
-        const earnedAlloc = calculateTotalAllowance(employee, "Earned", endOfYear);
+        // Pass "true" as the 4th parameter to assume a full 12 months for the yearly report
+        const casualAlloc = calculateTotalAllowance(employee, "Casual", endOfYear, true);
+        const sickAlloc = calculateTotalAllowance(employee, "Sick", endOfYear, true);
+        const earnedAlloc = calculateTotalAllowance(employee, "Earned", endOfYear, true);
 
         const totalAllocated = casualAlloc + sickAlloc + earnedAlloc;
 
