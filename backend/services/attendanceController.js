@@ -33,11 +33,11 @@ function calculateStatus(checkIn, checkOut) {
 export const formatTime = (date) => {
   if (!date) return null;
   const d = new Date(date);
-  return d.toLocaleTimeString('en-US', { 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    hour12: true, 
-    timeZone: 'Asia/Kolkata' 
+  return d.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata'
   });
 };
 
@@ -83,16 +83,16 @@ export const checkIn = async (req, res) => {
     }
 
     // Get today's IST hour and minute for late check
-    const istTimeStr = now.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: 'numeric', 
-      hour12: false, 
-      timeZone: 'Asia/Kolkata' 
+    const istTimeStr = now.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+      timeZone: 'Asia/Kolkata'
     });
     const [istHour, istMinute] = istTimeStr.split(':').map(Number);
 
     let status = "Logged In";
-    if (istHour > OFFICE_START_TIME || (istHour === OFFICE_START_TIME && istMinute > 0)) {
+    if (istHour > OFFICE_START_TIME || (istHour === OFFICE_START_TIME && istMinute > 30)) {
       status = "Late";
     }
 
