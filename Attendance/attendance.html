@@ -112,7 +112,7 @@
     }
 
     function renderAdminAttendance(employees, att, leaves) {
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toLocaleDateString('en-CA');
       const todayAtt = att.filter(a => a.date === today);
 
       // Calculate top-level stats
@@ -425,7 +425,7 @@
 
     function renderEmployeeAttendance(allAttendance) {
       const empName = user.employeeData?.name || user.name;
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toLocaleDateString('en-CA');
       const myRecords = allAttendance || [];
 
       const todayRecord = myRecords.find(a => a.date === today);

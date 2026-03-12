@@ -1,10 +1,10 @@
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 
-// Helper: Check if date is weekend
+// Helper: Check if date is weekend (in IST)
 const isWeekend = (date) => {
-  const day = new Date(date).getDay();
-  return day === 0 || day === 6;
+  const dayStr = new Date(date).toLocaleDateString("en-US", { weekday: "short", timeZone: "Asia/Kolkata" });
+  return dayStr === "Sat" || dayStr === "Sun";
 };
 
 // Helper: Calculate work hours
@@ -13,12 +13,12 @@ const calculateWorkHours = (checkIn, checkOut) => {
   return ((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60));
 };
 
-// Helper: Get start and end of day
+// Helper: Get start and end of day (Normalized to UTC for queries)
 const getDateRange = (date) => {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(date);
-  end.setHours(23, 59, 59, 999);
+  // Always use the IST date string to define the 'day'
+  const dateStr = typeof date === 'string' ? date : getISTDateString(date);
+  const start = new Date(dateStr + "T00:00:00Z");
+  const end = new Date(dateStr + "T23:59:59.999Z");
   return { start, end };
 };
 
@@ -29,11 +29,26 @@ function calculateStatus(checkIn, checkOut) {
   return "Present";
 }
 
-// Helper to format time for display
+// Helper to format time for display (Forcing IST)
 export const formatTime = (date) => {
   if (!date) return null;
   const d = new Date(date);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    hour12: true, 
+    timeZone: 'Asia/Kolkata' 
+  });
+};
+
+// Helper: Get date string in IST (YYYY-MM-DD)
+const getISTDateString = (date = new Date()) => {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date(date));
 };
 
 const OFFICE_START_TIME = 10; // 10 AM
@@ -67,12 +82,17 @@ export const checkIn = async (req, res) => {
       });
     }
 
-    // Get today's date at office start time
-    const officeStart = new Date(now);
-    officeStart.setHours(OFFICE_START_TIME, 0, 0, 0);
+    // Get today's IST hour and minute for late check
+    const istTimeStr = now.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: 'numeric', 
+      hour12: false, 
+      timeZone: 'Asia/Kolkata' 
+    });
+    const [istHour, istMinute] = istTimeStr.split(':').map(Number);
 
     let status = "Logged In";
-    if (now > officeStart) {
+    if (istHour > OFFICE_START_TIME || (istHour === OFFICE_START_TIME && istMinute > 0)) {
       status = "Late";
     }
 
@@ -81,7 +101,7 @@ export const checkIn = async (req, res) => {
       check_in: now,
       check_out: null,
       status,
-      date: now,
+      date: new Date(getISTDateString(now) + "T00:00:00Z"), // Store normalized date
       location: location || {}
     });
 
@@ -170,7 +190,7 @@ export const getDailyAttendance = async (req, res) => {
   try {
     let { date } = req.query;
     if (!date) {
-      date = new Date().toISOString().slice(0, 10);
+      date = getISTDateString();
     }
     const { start, end } = getDateRange(date);
     const records = await Attendance.find({
@@ -184,7 +204,7 @@ export const getDailyAttendance = async (req, res) => {
 
     // Format records with camelCase for frontend
     const attendanceRecords = records.map(record => ({
-      date: record.date.toISOString().split('T')[0],
+      date: getISTDateString(record.date),
       checkIn: record.check_in ? formatTime(record.check_in) : '--',
       checkOut: record.check_out ? formatTime(record.check_out) : '--',
       status: record.status,
@@ -221,7 +241,7 @@ export const getAttendanceHistory = async (req, res) => {
 
     // Format the response with camelCase properties for frontend
     const attendance = attendanceRecords.map(record => ({
-      date: record.date.toISOString().split('T')[0],
+      date: getISTDateString(record.date),
       checkIn: record.check_in ? formatTime(record.check_in) : '--',
       checkOut: record.check_out ? formatTime(record.check_out) : '--',
       status: record.status,
@@ -252,7 +272,7 @@ export const getAllAttendance = async (req, res) => {
       .populate('employee_id', 'name email department');
 
     const attendance = records.map(record => ({
-      date: record.date.toISOString().split('T')[0],
+      date: getISTDateString(record.date),
       checkIn: record.check_in ? formatTime(record.check_in) : '--',
       checkOut: record.check_out ? formatTime(record.check_out) : '--',
       status: record.status,
