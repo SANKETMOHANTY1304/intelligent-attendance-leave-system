@@ -20,27 +20,9 @@ export const calculateTotalAllowance = (employee, leaveType, targetDate = new Da
   }
 
   if (rule.increment_per_month) {
-    if (!employee || !employee.joining_date) return 0;
-
-    const year = targetDate.getFullYear();
-    const joiningDate = new Date(employee.joining_date);
-
-    // If joining date is invalid or in the future
-    if (isNaN(joiningDate.getTime()) || joiningDate.getFullYear() > year) {
-      return 0;
-    }
-
-    let startMonth = 1; // Default to January
-    if (joiningDate.getFullYear() === year) {
-      startMonth = joiningDate.getMonth() + 1;
-    }
-
-    const endMonth = targetDate.getMonth() + 1;
-
-    // Months eligible for leave this year
-    const activeMonths = Math.max(0, endMonth - startMonth + 1);
-
-    return activeMonths * rule.increment_per_month;
+    // We always assume a full 12 months of allocation (12 * 2.5 = 30 days per year for Sick/Earned)
+    // rather than pro-rating them based on joining date.
+    return 12 * rule.increment_per_month;
   }
 
   return 0;
